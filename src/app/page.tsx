@@ -11,6 +11,13 @@ import type { Escola, Papel, Pessoa, Turma } from "@/lib/tipos";
 // só sai dali quem tiver o código de outra turma, que a escola fornece.
 const MEMORIA = "modo-aula:turma";
 
+// Quem abre o link pela primeira vez não tem código de turma nenhum.
+const DEMONSTRACAO = [
+  { codigo: "9AML", turma: "9º ano A" },
+  { codigo: "9BML", turma: "9º ano B" },
+  { codigo: "8ACA", turma: "8º ano A" },
+];
+
 type Etapa = "escolha" | "codigo" | "pessoas";
 
 export default function Entrada() {
@@ -167,6 +174,22 @@ export default function Entrada() {
           >
             {ocupado ? "Procurando..." : "Entrar"}
           </button>
+
+          <div className="mt-10 border-t border-borda pt-5">
+            <p className="text-xs uppercase tracking-[0.15em] text-suave">Turmas de demonstração</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {DEMONSTRACAO.map((demo) => (
+                <button
+                  key={demo.codigo}
+                  onClick={() => setCodigo(demo.codigo)}
+                  className="rounded-xl border border-borda bg-superficie px-4 py-2 text-left transition hover:border-foco"
+                >
+                  <span className="font-mono text-sm tracking-[0.15em] text-foco">{demo.codigo}</span>
+                  <span className="ml-2 text-xs text-suave">{demo.turma}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </Moldura>
     );
