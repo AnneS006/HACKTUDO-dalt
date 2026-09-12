@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Modo Aula</string>
+    <string name="title_activity_main">Modo Aula</string>
+    <string name="package_name">app.modoaula</string>
+    <string name="custom_url_scheme">app.modoaula</string>
+</resources>

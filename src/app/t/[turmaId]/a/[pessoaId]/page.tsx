@@ -15,6 +15,7 @@ import {
 import { db } from "@/lib/firebase";
 import { Avatar } from "@/components/avatar";
 import { Camera } from "@/components/camera";
+import { destravarNativo, temCascaNativa, travarNativo } from "@/lib/foco-nativo";
 import { GavetaFerramentas } from "@/components/ferramentas";
 import { VistaColetiva } from "@/components/coletivo";
 import {
@@ -139,21 +140,28 @@ export default function TelaDoAluno() {
     [agora],
   );
 
-  // Tela cheia e tela acesa duram enquanto o foco da turma estiver ligado.
-  // O navegador exige um toque para entrar em tela cheia, então é o próprio
-  // botão de começar que dispara — depois disso o app se mantém sozinho.
+  // Com a casca Android instalada, o sistema prende o aparelho no app de
+  // verdade. No navegador o máximo é tela cheia, e o toque no botão é exigência
+  // dele: nenhum site entra em tela cheia sem gesto do usuário.
   const entrarEmFoco = useCallback(async () => {
-    try {
-      if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
-    } catch {}
+    const nativo = await travarNativo();
+
+    if (!nativo?.travado) {
+      try {
+        if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
+      } catch {}
+    }
+
     try {
       trava.current = await navigator.wakeLock?.request("screen");
     } catch {}
+
     setTravado(true);
     setForaDoFoco(false);
   }, []);
 
   const soltarFoco = useCallback(async () => {
+    await destravarNativo();
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
     } catch {}
@@ -317,9 +325,13 @@ export default function TelaDoAluno() {
         >
           Entrar no foco
         </button>
-        <p className="mt-6 text-xs leading-relaxed text-suave/60">
-          Para travar de vez no aparelho: {instrucaoDeTravar()}
-        </p>
+        {/* Com a casca nativa quem trava é o sistema, então não faz sentido
+            pedir ao aluno o gesto manual. */}
+        {!temCascaNativa() && (
+          <p className="mt-6 text-xs leading-relaxed text-suave/60">
+            Para travar de vez no aparelho: {instrucaoDeTravar()}
+          </p>
+        )}
       </Centro>
     );
   }
