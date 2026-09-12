@@ -106,8 +106,19 @@ export default function Entrada() {
     return (
       <Moldura>
         <div className="surgir">
-          <h1 className="text-5xl font-bold tracking-tight">Modo Aula</h1>
-          <p className="mt-4 max-w-md text-lg leading-relaxed text-suave">
+          <p className="font-mono text-xs uppercase tracking-[0.22em] text-foco">
+            Uso pedagógico do celular
+          </p>
+
+          <h1 className="mt-5 text-6xl font-extrabold leading-[0.95] sm:text-7xl">
+            Modo
+            <br />
+            Aula
+          </h1>
+
+          <div className="mt-7 h-1.5 w-24 rounded-full bg-foco" />
+
+          <p className="mt-7 max-w-md text-xl leading-relaxed text-texto/80">
             O celular deixa de disputar a aula e passa a ser a ferramenta dela. Sem instalar nada,
             sem rastrear ninguém.
           </p>
@@ -131,10 +142,17 @@ export default function Entrada() {
             />
           </div>
 
-          <ul className="mt-14 space-y-2 text-sm text-suave">
-            <li>Sem senha e sem conta: seu perfil é só o seu nome e a sua foto.</li>
-            <li>O que você sente no check-in vira número da turma, nunca registro seu.</li>
-            <li>Funciona em qualquer celular, mesmo com internet fraca.</li>
+          <ul className="mt-14 space-y-3 text-sm leading-relaxed text-suave">
+            {[
+              "Sem senha e sem conta: seu perfil é só o seu nome e a sua foto.",
+              "O que você sente no check-in vira número da turma, nunca registro seu.",
+              "Funciona em qualquer celular, mesmo com internet fraca.",
+            ].map((fato) => (
+              <li key={fato} className="flex gap-3">
+                <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-foco" />
+                {fato}
+              </li>
+            ))}
           </ul>
         </div>
       </Moldura>
@@ -251,12 +269,13 @@ function Porta({
   return (
     <button
       onClick={aoClicar}
-      className="group rounded-3xl border border-borda bg-superficie p-7 text-left transition hover:border-foco"
+      className="group rounded-3xl border border-borda bg-superficie p-7 text-left transition hover:-translate-y-0.5 hover:border-foco hover:bg-superficie-alta"
     >
-      <p className="text-xl font-semibold">{titulo}</p>
+      <p className="font-titulo text-xl font-semibold">{titulo}</p>
       <p className="mt-2 text-sm leading-relaxed text-suave">{descricao}</p>
-      <span className="mt-5 inline-block text-sm text-foco opacity-0 transition group-hover:opacity-100">
-        entrar →
+      <span className="mt-5 inline-flex items-center gap-2 text-sm text-foco transition group-hover:gap-3">
+        entrar
+        <span aria-hidden="true">→</span>
       </span>
     </button>
   );
@@ -264,7 +283,7 @@ function Porta({
 
 function Moldura({ children }: { children: React.ReactNode }) {
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col justify-center px-6 py-14">
+    <main className="ambiente mx-auto flex min-h-dvh w-full max-w-2xl flex-col justify-center px-6 py-14">
       {children}
     </main>
   );

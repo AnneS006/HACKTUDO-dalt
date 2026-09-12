@@ -348,8 +348,8 @@ export default function TelaDoAluno() {
   const pausa =
     ciclo.fase === "pausa" ? (
       <div className="surgir fixed inset-0 z-50 flex flex-col items-center justify-center bg-fundo px-6 text-center">
-        <p className="text-sm uppercase tracking-[0.2em] text-pausa">Pausa</p>
-        <p className="mt-6 font-mono text-7xl font-bold tabular-nums text-pausa">
+        <p className="font-mono text-sm uppercase tracking-[0.22em] text-pausa">Pausa</p>
+        <p className="respirar mt-6 font-mono text-7xl font-bold tabular-nums text-pausa">
           {formatarTempo(ciclo.restanteSeg)}
         </p>
         <p className="mt-8 max-w-xs text-2xl leading-snug">{convite}</p>
