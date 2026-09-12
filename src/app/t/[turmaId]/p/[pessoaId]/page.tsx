@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
+  arrayUnion,
   collection,
   deleteDoc,
   doc,
@@ -53,6 +54,7 @@ export default function PainelProfessor() {
   const [tipo, setTipo] = useState<TipoAtividade>("quiz");
   const [pedido, setPedido] = useState("");
   const [rascunho, setRascunho] = useState<Atividade | null>(null);
+  const [salvas, setSalvas] = useState<Atividade[]>([]);
   const [sintese, setSintese] = useState("");
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState("");
@@ -60,9 +62,10 @@ export default function PainelProfessor() {
   const sessaoRef = useMemo(() => doc(db, "turmas", turmaId, "sessao", "atual"), [turmaId]);
 
   useEffect(() => {
-    getDoc(doc(db, "turmas", turmaId)).then((s) =>
-      setTurma({ id: s.id, ...s.data() } as Turma),
-    );
+    getDoc(doc(db, "turmas", turmaId)).then((s) => {
+      setTurma({ id: s.id, ...s.data() } as Turma);
+      setSalvas(((s.data()?.salvas as Atividade[]) ?? []).slice().reverse());
+    });
     getDoc(doc(db, "turmas", turmaId, "pessoas", pessoaId)).then((s) =>
       setEu({ id: s.id, ...s.data() } as Pessoa),
     );
@@ -160,11 +163,18 @@ export default function PainelProfessor() {
     }
   }
 
-  async function publicar() {
-    if (!rascunho) return;
+  async function publicar(atividade: Atividade) {
     const antigas = await getDocs(collection(sessaoRef, "respostas"));
     await Promise.all(antigas.docs.map((d) => deleteDoc(d.ref)));
-    await updateDoc(sessaoRef, { atividade: rascunho });
+    await updateDoc(sessaoRef, { atividade });
+
+    // Guardar na própria turma deixa a atividade pronta para reenviar depois
+    // sem depender da IA responder de novo.
+    if (!salvas.some((s) => s.titulo === atividade.titulo)) {
+      await updateDoc(doc(db, "turmas", turmaId), { salvas: arrayUnion(atividade) });
+      setSalvas((atuais) => [atividade, ...atuais]);
+    }
+
     setRascunho(null);
     setPedido("");
     setSintese("");
@@ -175,7 +185,7 @@ export default function PainelProfessor() {
     setOcupado(true);
     try {
       const textos = respostas
-        .flatMap((r) => [r.texto, ...(r.respostas ?? [])])
+        .flatMap((r) => [r.texto, r.peca, ...(r.respostas ?? []), ...(r.palavras ?? [])])
         .filter((t): t is string => Boolean(t?.trim()));
       const r = await fetch("/api/sintese", {
         method: "POST",
@@ -260,7 +270,7 @@ export default function PainelProfessor() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm">{a.nome}</p>
                   <p className="text-xs text-suave">
-                    {!sessao.focoAtivo ? "livre" : liberado ? "liberada" : "em foco"}
+                    {!sessao.focoAtivo ? "livre" : liberado ? "fora do foco" : "em foco"}
                     {responderam.has(a.id) && " · entregou"}
                   </p>
                 </div>
@@ -293,6 +303,27 @@ export default function PainelProfessor() {
             <p className="mt-3 text-sm text-suave">
               {respostas.length} de {alunos.length} entregaram
             </p>
+          </div>
+        )}
+
+        {salvas.length > 0 && !rascunho && (
+          <div className="mb-6">
+            <p className="mb-3 text-xs uppercase tracking-[0.15em] text-suave">
+              Já usadas nesta turma
+            </p>
+            <ul className="flex flex-wrap gap-2">
+              {salvas.slice(0, 8).map((s, i) => (
+                <li key={`${s.titulo}-${i}`}>
+                  <button
+                    onClick={() => publicar(s)}
+                    className="rounded-xl border border-borda bg-superficie px-4 py-2 text-sm text-suave transition hover:border-foco hover:text-texto"
+                  >
+                    {s.titulo}
+                    <span className="ml-2 text-xs opacity-60">{s.tipo}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 
@@ -383,7 +414,7 @@ export default function PainelProfessor() {
 
             <div className="mt-5 flex gap-3">
               <button
-                onClick={publicar}
+                onClick={() => publicar(rascunho)}
                 className="rounded-2xl bg-foco px-6 py-3 font-semibold text-fundo"
               >
                 Enviar para a turma

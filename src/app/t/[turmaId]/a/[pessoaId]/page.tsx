@@ -116,7 +116,7 @@ export default function TelaDoAluno() {
     [agora],
   );
 
-  // Tela cheia e tela acesa duram enquanto a professora mantiver o foco ligado.
+  // Tela cheia e tela acesa duram enquanto o foco da turma estiver ligado.
   // O navegador exige um toque para entrar em tela cheia, então é o próprio
   // botão de começar que dispara — depois disso o app se mantém sozinho.
   const entrarEmFoco = useCallback(async () => {
@@ -168,7 +168,11 @@ export default function TelaDoAluno() {
     };
   }, [travado]);
 
-  useEffect(() => soltarFoco as () => void, [soltarFoco]);
+  useEffect(() => {
+    return () => {
+      soltarFoco();
+    };
+  }, [soltarFoco]);
 
   async function registrarCheckin(estado: Estado | null) {
     if (estado) await updateDoc(sessaoRef, { [`checkins.${estado}`]: increment(1) });
@@ -229,12 +233,12 @@ export default function TelaDoAluno() {
           <p className="text-lg">{eu.nome}</p>
         </div>
         <h1 className="mt-8 text-2xl font-bold">
-          {liberado ? "Você está liberada desta atividade" : "A aula ainda não começou"}
+          {liberado ? "Você está fora do modo aula" : "A aula ainda não começou"}
         </h1>
         <p className="mt-3 text-suave">
           {liberado
-            ? "A professora te tirou do modo aula. Pode guardar o celular."
-            : `${turma.nome} · a professora inicia quando a turma estiver pronta.`}
+            ? "Quem está dando a aula te liberou desta atividade. Pode guardar o celular."
+            : `${turma.nome} · a aula começa quando a turma estiver pronta.`}
         </p>
       </Centro>
     );
@@ -245,7 +249,7 @@ export default function TelaDoAluno() {
       <Centro>
         <h1 className="text-2xl font-bold">Como você chega para esta aula?</h1>
         <p className="mt-3 text-sm text-suave">
-          Ninguém vê a sua resposta. A professora só enxerga o total da turma.
+          Ninguém vê a sua resposta. Só aparece o total da turma.
         </p>
         <div className="mt-8 grid w-full gap-3">
           {ESTADOS.map(({ chave, rotulo }) => (
@@ -268,10 +272,10 @@ export default function TelaDoAluno() {
   if (!travado) {
     return (
       <Centro>
-        <h1 className="text-3xl font-bold">A professora abriu a aula</h1>
+        <h1 className="text-3xl font-bold">A aula foi aberta</h1>
         <p className="mt-4 leading-relaxed text-suave">
           Ao entrar, o Modo Aula ocupa a tela inteira e ela não apaga enquanto a aula durar. Sai
-          sozinho quando a professora encerrar.
+          sozinho quando a aula for encerrada.
         </p>
         <p className="mt-5 text-sm text-suave/70">
           Tudo que a atividade pede acontece aqui dentro, câmera inclusive.
@@ -337,7 +341,7 @@ export default function TelaDoAluno() {
       <Centro>
         <p className="text-sm uppercase tracking-[0.2em] text-foco">Entregue</p>
         {feedback && <p className="mt-6 text-lg leading-relaxed">{feedback}</p>}
-        <p className="mt-8 text-suave">Espera a próxima atividade da professora.</p>
+        <p className="mt-8 text-suave">Espere a próxima atividade da aula.</p>
       </Centro>
     );
   }
@@ -349,7 +353,7 @@ export default function TelaDoAluno() {
           {formatarTempo(ciclo.restanteSeg)}
         </p>
         <h1 className="mt-6 text-2xl font-bold">Modo aula ligado</h1>
-        <p className="mt-3 text-suave">A professora ainda não enviou a atividade.</p>
+        <p className="mt-3 text-suave">A atividade ainda não foi enviada.</p>
       </Centro>
     );
   }
