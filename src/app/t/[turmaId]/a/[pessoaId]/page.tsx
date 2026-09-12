@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   collection,
   doc,
@@ -36,6 +36,7 @@ const COLETIVOS = ["enquete", "nuvem", "coletiva"];
 
 export default function TelaDoAluno() {
   const { turmaId, pessoaId } = useParams<{ turmaId: string; pessoaId: string }>();
+  const router = useRouter();
 
   const [turma, setTurma] = useState<Turma | null>(null);
   const [eu, setEu] = useState<Pessoa | null>(null);
@@ -240,6 +241,13 @@ export default function TelaDoAluno() {
             ? "Quem está dando a aula te liberou desta atividade. Pode guardar o celular."
             : `${turma.nome} · a aula começa quando a turma estiver pronta.`}
         </p>
+        {/* Só aqui: trocar de perfil no meio do foco esvaziaria o sentido dele. */}
+        <button
+          onClick={() => router.push("/")}
+          className="mt-10 text-sm text-suave underline-offset-4 hover:underline"
+        >
+          Não é você?
+        </button>
       </Centro>
     );
   }

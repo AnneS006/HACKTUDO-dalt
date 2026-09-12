@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   arrayUnion,
   collection,
@@ -42,6 +42,7 @@ const COLETIVOS = ["enquete", "nuvem", "coletiva"];
 
 export default function PainelProfessor() {
   const { turmaId, pessoaId } = useParams<{ turmaId: string; pessoaId: string }>();
+  const router = useRouter();
 
   const [turma, setTurma] = useState<Turma | null>(null);
   const [eu, setEu] = useState<Pessoa | null>(null);
@@ -135,6 +136,19 @@ export default function PainelProfessor() {
     await updateDoc(sessaoRef, { liberados });
   }
 
+  // Sair com a turma em foco deixaria os celulares presos sem ninguém para
+  // liberar, então a saída encerra a aula junto.
+  async function sair() {
+    if (sessao?.focoAtivo) {
+      const encerrar = confirm(
+        "A turma ainda está em foco. Sair sem encerrar deixa os celulares presos na aula.\n\nEncerrar a aula e sair?",
+      );
+      if (!encerrar) return;
+      await encerrarFoco();
+    }
+    router.push("/");
+  }
+
   async function ajustarTempo(campo: "focoMin" | "pausaMin", valor: number) {
     await updateDoc(sessaoRef, { [campo]: Math.max(1, valor) });
   }
@@ -213,6 +227,12 @@ export default function PainelProfessor() {
         <span className="ml-auto rounded-xl border border-borda px-3 py-2 font-mono text-sm tracking-[0.2em] text-foco">
           {turma.codigo}
         </span>
+        <button
+          onClick={sair}
+          className="rounded-xl border border-borda px-4 py-2 text-sm text-suave transition hover:border-alerta hover:text-alerta"
+        >
+          Sair
+        </button>
       </header>
 
       <section className="rounded-3xl border border-borda bg-superficie p-6">
