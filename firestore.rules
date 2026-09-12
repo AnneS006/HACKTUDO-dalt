@@ -1,0 +1,21 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /sessoes/{codigo} {
+      // Quem tem o código entra. Ninguém consegue varrer a lista de salas.
+      allow get: if true;
+      allow list: if false;
+      allow create, update, delete: if true;
+
+      match /entregas/{entrega} {
+        allow read: if true;
+        allow create: if request.resource.data.keys().hasOnly(
+          ['tipo', 'texto', 'imagem', 'criadaEm']
+        );
+        allow update: if false;
+        allow delete: if true;
+      }
+    }
+  }
+}
