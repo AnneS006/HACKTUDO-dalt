@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Archivo, IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
 
@@ -27,6 +27,15 @@ export const metadata: Metadata = {
   title: "Modo Aula",
   description:
     "O celular do aluno vira ferramenta da aula: sem app, sem login e sem rastreamento.",
+  // Instalado na tela de início, o iPhone abre sem a barra do Safari — é o que
+  // mais aproxima o aluno de iOS da experiência do app Android.
+  appleWebApp: { capable: true, title: "Modo Aula", statusBarStyle: "black-translucent" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#080d12",
+  // A tela do aluno é cheia de alvos de toque; zoom acidental atrapalha a aula.
+  maximumScale: 1,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
