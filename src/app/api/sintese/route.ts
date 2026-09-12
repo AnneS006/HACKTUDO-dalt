@@ -27,10 +27,13 @@ export async function POST(request: Request) {
 
   try {
     const sintese = await gerarTexto({
-      contents: `Atividade: ${atividade.instrucao}
+      contents: `Atividade: ${atividade.instrucao?.slice(0, 800)}
 
 Respostas da turma:
-${respostas.map((r, i) => `${i + 1}. ${r}`).join("\n")}`,
+${respostas
+  .slice(0, 60)
+  .map((r, i) => `${i + 1}. ${String(r).slice(0, 1000)}`)
+  .join("\n")}`,
       config: { systemInstruction: INSTRUCOES, maxOutputTokens: 2000 },
     });
 

@@ -143,8 +143,8 @@ export async function POST(request: Request) {
   try {
     const texto = await gerarTexto({
       contents: [
-        materia?.trim() ? `Disciplina: ${materia.trim()}` : "",
-        `Pedido do professor: ${pedido.trim()}`,
+        materia?.trim() ? `Disciplina: ${materia.trim().slice(0, 60)}` : "",
+        `Pedido do professor: ${pedido.trim().slice(0, 500)}`,
       ]
         .filter(Boolean)
         .join("\n"),

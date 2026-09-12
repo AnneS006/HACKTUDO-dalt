@@ -28,21 +28,23 @@ export async function POST(request: Request) {
 
   const partes: Parte[] = [
     {
-      text: `Atividade proposta: ${atividade.instrucao}\nO que caracteriza uma boa resposta: ${atividade.criterio}`,
+      text: `Atividade proposta: ${atividade.instrucao?.slice(0, 800)}\nO que caracteriza uma boa resposta: ${atividade.criterio?.slice(0, 500)}`,
     },
   ];
 
-  if (imagem?.startsWith("data:image/")) {
+  // Tudo que vem do aparelho do aluno tem teto: sem isso, uma entrega forjada
+  // consome a cota da escola inteira.
+  if (imagem?.startsWith("data:image/") && imagem.length < 1_200_000) {
     partes.push({
       inlineData: {
-        mimeType: "image/jpeg",
+        mimeType: imagem.slice(5, imagem.indexOf(";")) || "image/jpeg",
         data: imagem.split(",")[1] ?? "",
       },
     });
   }
 
   if (texto?.trim()) {
-    partes.push({ text: `Resposta escrita pelo aluno: ${texto.trim()}` });
+    partes.push({ text: `Resposta escrita pelo aluno: ${texto.trim().slice(0, 5000)}` });
   }
 
   try {

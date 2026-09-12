@@ -29,10 +29,14 @@ export async function POST(request: Request) {
 
   try {
     const dica = await gerarTexto({
-      contents: `Atividade: ${atividade.instrucao}
-${rascunho?.trim() ? `O que o aluno já escreveu: ${rascunho.trim()}` : "O aluno ainda não escreveu nada."}
+      contents: `Atividade: ${atividade.instrucao?.slice(0, 800)}
+${
+  rascunho?.trim()
+    ? `O que o aluno já escreveu: ${rascunho.trim().slice(0, 2000)}`
+    : "O aluno ainda não escreveu nada."
+}
 
-Dúvida do aluno: ${duvida.trim()}`,
+Dúvida do aluno: ${duvida.trim().slice(0, 500)}`,
       config: { systemInstruction: INSTRUCOES, maxOutputTokens: 2000 },
     });
 

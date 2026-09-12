@@ -1,22 +1,26 @@
 rules_version = '2';
 
-// Regras de demonstração: qualquer pessoa com o link entra. O que se protege
-// aqui é o formato do dado, não o acesso — em produção entrariam App Check e
-// autenticação de professor.
+// Demonstração sem login: quem tem o código da turma entra. O que se protege
+// aqui é a integridade do que existe e o formato do que entra — não o acesso.
+// Em produção, controlar a aula exigiria autenticação de professor.
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Catálogo da rede: é por ele que aluno e professor se encontram.
+    // O catálogo pode ser lido e semeado, mas nunca apagado: perder uma escola
+    // ou uma turma derrubaria o app inteiro para todo mundo.
     match /escolas/{escola} {
-      allow read, write: if true;
+      allow read, create, update: if true;
+      allow delete: if false;
     }
 
     match /turmas/{turma} {
-      allow read, write: if true;
+      allow read, create, update: if true;
+      allow delete: if false;
 
-      // Perfil é só nome, cor e foto. Nenhum dado sensível mora aqui.
+      // Perfil é só nome, cor, foto e disciplina. Nada sensível mora aqui.
       match /pessoas/{pessoa} {
-        allow read, write: if true;
+        allow read, create, update: if true;
+        allow delete: if false;
       }
 
       // Estado da aula: quem está em foco, o relógio e o contador agregado de
@@ -24,10 +28,23 @@ service cloud.firestore {
       match /sessao/{documento} {
         allow read, write: if true;
 
-        // Entrega não pode ser alterada depois de enviada.
         match /respostas/{resposta} {
-          allow read, create, delete: if true;
+          allow read, delete: if true;
           allow update: if false;
+
+          // A entrega só aceita os campos que o app envia, com teto de tamanho:
+          // sem isso, o banco vira depósito de qualquer coisa.
+          allow create: if request.resource.data.keys().hasOnly([
+                'pessoaId', 'nome', 'tipo', 'criadaEm',
+                'texto', 'imagem', 'respostas', 'acertos', 'total',
+                'opcao', 'palavras', 'peca'
+              ])
+              && (!('imagem' in request.resource.data)
+                  || request.resource.data.imagem.size() < 800000)
+              && (!('texto' in request.resource.data)
+                  || request.resource.data.texto.size() < 5000)
+              && (!('peca' in request.resource.data)
+                  || request.resource.data.peca.size() < 5000);
         }
       }
     }
