@@ -127,7 +127,11 @@ export async function POST(request: Request) {
     return Response.json({ erro: "GEMINI_API_KEY não configurada" }, { status: 500 });
   }
 
-  const { pedido, tipo } = (await request.json()) as { pedido: string; tipo: TipoAtividade };
+  const { pedido, tipo, materia } = (await request.json()) as {
+    pedido: string;
+    tipo: TipoAtividade;
+    materia?: string;
+  };
 
   if (typeof pedido !== "string" || pedido.trim().length < 3) {
     return Response.json({ erro: "Descreva o que a turma deve fazer." }, { status: 400 });
@@ -138,7 +142,12 @@ export async function POST(request: Request) {
 
   try {
     const texto = await gerarTexto({
-      contents: `Pedido do professor: ${pedido.trim()}`,
+      contents: [
+        materia?.trim() ? `Disciplina: ${materia.trim()}` : "",
+        `Pedido do professor: ${pedido.trim()}`,
+      ]
+        .filter(Boolean)
+        .join("\n"),
       config: {
         systemInstruction: `${BASE}\n\n${POR_TIPO[tipo]}`,
         responseMimeType: "application/json",

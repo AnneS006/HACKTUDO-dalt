@@ -22,6 +22,8 @@ export interface Pessoa {
   papel: Papel;
   cor: string;
   foto?: string;
+  // Só para quem dá aula: contextualiza a atividade que a IA escreve.
+  materia?: string;
 }
 
 export type TipoAtividade =

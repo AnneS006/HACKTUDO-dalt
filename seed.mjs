@@ -30,7 +30,10 @@ const turmas = [
     periodoMin: 50,
     focoMin: 12,
     pausaMin: 3,
-    professores: ["Marina Duarte", "Rafael Nogueira"],
+    professores: [
+      { nome: "Marina Duarte", materia: "Matemática" },
+      { nome: "Rafael Nogueira", materia: "História" },
+    ],
     alunos: [
       "Ana Beatriz Rocha",
       "Caio Fernandes",
@@ -52,7 +55,7 @@ const turmas = [
     periodoMin: 50,
     focoMin: 10,
     pausaMin: 4,
-    professores: ["Marina Duarte"],
+    professores: [{ nome: "Marina Duarte", materia: "Matemática" }],
     alunos: [
       "Bruno Salgado",
       "Carolina Prado",
@@ -72,7 +75,7 @@ const turmas = [
     periodoMin: 45,
     focoMin: 10,
     pausaMin: 3,
-    professores: ["Patrícia Verissimo"],
+    professores: [{ nome: "Patrícia Verissimo", materia: "Ciências" }],
     alunos: [
       "Alice Tavares",
       "Diego Moreira",
@@ -115,17 +118,18 @@ for (const turma of turmas) {
     checkins: {},
   });
 
-  [...professores.map((n) => ["professor", n]), ...alunos.map((n) => ["aluno", n])].forEach(
-    ([papel, nome], indice) => {
-      const pessoaId = identificador(nome);
-      lote.set(doc(db, "turmas", id, "pessoas", pessoaId), {
-        nome,
-        papel,
-        cor: CORES[indice % CORES.length],
-      });
-      totalPessoas += 1;
-    },
-  );
+  const gente = [
+    ...professores.map((p) => ({ ...p, papel: "professor" })),
+    ...alunos.map((nome) => ({ nome, papel: "aluno" })),
+  ];
+
+  gente.forEach((pessoa, indice) => {
+    lote.set(doc(db, "turmas", id, "pessoas", identificador(pessoa.nome)), {
+      ...pessoa,
+      cor: CORES[indice % CORES.length],
+    });
+    totalPessoas += 1;
+  });
 }
 
 await lote.commit();

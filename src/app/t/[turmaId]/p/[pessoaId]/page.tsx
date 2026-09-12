@@ -56,6 +56,8 @@ export default function PainelProfessor() {
   const [pedido, setPedido] = useState("");
   const [rascunho, setRascunho] = useState<Atividade | null>(null);
   const [salvas, setSalvas] = useState<Atividade[]>([]);
+  const [editandoMateria, setEditandoMateria] = useState(false);
+  const [materia, setMateria] = useState("");
   const [sintese, setSintese] = useState("");
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState("");
@@ -67,9 +69,11 @@ export default function PainelProfessor() {
       setTurma({ id: s.id, ...s.data() } as Turma);
       setSalvas(((s.data()?.salvas as Atividade[]) ?? []).slice().reverse());
     });
-    getDoc(doc(db, "turmas", turmaId, "pessoas", pessoaId)).then((s) =>
-      setEu({ id: s.id, ...s.data() } as Pessoa),
-    );
+    getDoc(doc(db, "turmas", turmaId, "pessoas", pessoaId)).then((s) => {
+      const pessoa = { id: s.id, ...s.data() } as Pessoa;
+      setEu(pessoa);
+      setMateria(pessoa.materia ?? "");
+    });
     getDocs(collection(db, "turmas", turmaId, "pessoas")).then((s) =>
       setPessoas(s.docs.map((d) => ({ id: d.id, ...d.data() }) as Pessoa)),
     );
@@ -149,6 +153,13 @@ export default function PainelProfessor() {
     router.push("/");
   }
 
+  async function salvarMateria() {
+    const limpa = materia.trim();
+    setEditandoMateria(false);
+    setEu((p) => (p ? { ...p, materia: limpa } : p));
+    await updateDoc(doc(db, "turmas", turmaId, "pessoas", pessoaId), { materia: limpa });
+  }
+
   async function ajustarTempo(campo: "focoMin" | "pausaMin", valor: number) {
     await updateDoc(sessaoRef, { [campo]: Math.max(1, valor) });
   }
@@ -165,7 +176,7 @@ export default function PainelProfessor() {
       const r = await fetch("/api/atividade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pedido, tipo }),
+        body: JSON.stringify({ pedido, tipo, materia: eu?.materia }),
       });
       const dados = await r.json();
       if (!r.ok) throw new Error(dados.erro);
@@ -221,7 +232,27 @@ export default function PainelProfessor() {
       <header className="mb-8 flex items-center gap-4">
         <Avatar pessoa={eu} tamanho="m" />
         <div>
-          <p className="text-sm text-suave">{eu.nome}</p>
+          <div className="flex items-center gap-2 text-sm text-suave">
+            <span>{eu.nome}</span>
+            {editandoMateria ? (
+              <input
+                value={materia}
+                onChange={(e) => setMateria(e.target.value)}
+                onBlur={salvarMateria}
+                onKeyDown={(e) => e.key === "Enter" && salvarMateria()}
+                placeholder="Matemática"
+                autoFocus
+                className="w-36 rounded-lg border border-foco bg-fundo px-2 py-1 text-sm text-texto outline-none"
+              />
+            ) : (
+              <button
+                onClick={() => setEditandoMateria(true)}
+                className="rounded-lg px-2 py-1 transition hover:text-texto"
+              >
+                {eu.materia ? `· ${eu.materia}` : "+ matéria"}
+              </button>
+            )}
+          </div>
           <h1 className="text-2xl font-bold">{turma.nome}</h1>
         </div>
         <span className="ml-auto rounded-xl border border-borda px-3 py-2 font-mono text-sm tracking-[0.2em] text-foco">
