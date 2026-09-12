@@ -1,386 +1,248 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { QRCodeSVG } from "qrcode.react";
-import {
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  onSnapshot,
-  orderBy,
-  query,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-} from "firebase/firestore";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { collection, getDocs, limit, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import {
-  DURACAO_SESSAO_MIN,
-  ESTADOS,
-  FERRAMENTAS,
-  calcularCiclo,
-  formatarTempo,
-  gerarCodigo,
-  type Atividade,
-  type Checkins,
-  type Entrega,
-} from "@/lib/tipos";
+import { Avatar } from "@/components/avatar";
+import type { Escola, Papel, Pessoa, Turma } from "@/lib/tipos";
 
-export default function PainelProfessor() {
-  const [pedido, setPedido] = useState("");
-  const [atividade, setAtividade] = useState<Atividade | null>(null);
-  const [codigo, setCodigo] = useState<string | null>(null);
+// O aparelho do aluno guarda a turma. Ele não escolhe de novo a cada aula:
+// só sai dali quem tiver o código de outra turma, que a escola fornece.
+const MEMORIA = "modo-aula:turma";
 
-  const [entregas, setEntregas] = useState<Entrega[]>([]);
-  const [checkins, setCheckins] = useState<Checkins>({});
-  const [iniciadaEm, setIniciadaEm] = useState<Date | null>(null);
-  const [focoMin, setFocoMin] = useState(10);
-  const [pausaMin, setPausaMin] = useState(3);
-  const [agora, setAgora] = useState(() => new Date());
+type Etapa = "escolha" | "codigo" | "pessoas";
 
-  const [sintese, setSintese] = useState("");
-  const [ocupado, setOcupado] = useState(false);
+export default function Entrada() {
+  const router = useRouter();
+
+  const [etapa, setEtapa] = useState<Etapa>("escolha");
+  const [papel, setPapel] = useState<Papel>("aluno");
+  const [codigo, setCodigo] = useState("");
+  const [turma, setTurma] = useState<Turma | null>(null);
+  const [escola, setEscola] = useState<Escola | null>(null);
+  const [pessoas, setPessoas] = useState<Pessoa[]>([]);
   const [erro, setErro] = useState("");
+  const [ocupado, setOcupado] = useState(false);
 
-  useEffect(() => {
-    const t = setInterval(() => setAgora(new Date()), 1000);
-    return () => clearInterval(t);
+  const abrirTurma = useCallback(async (alvo: Turma) => {
+    setTurma(alvo);
+
+    const [escolaSnap, pessoasSnap] = await Promise.all([
+      getDocs(query(collection(db, "escolas"))),
+      getDocs(collection(db, "turmas", alvo.id, "pessoas")),
+    ]);
+
+    setEscola(
+      escolaSnap.docs
+        .map((d) => ({ id: d.id, ...d.data() }) as Escola)
+        .find((e) => e.id === alvo.escolaId) ?? null,
+    );
+    setPessoas(pessoasSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Pessoa));
+    setEtapa("pessoas");
   }, []);
 
-  useEffect(() => {
-    if (!codigo) return;
-
-    const naSessao = onSnapshot(doc(db, "sessoes", codigo), (snap) => {
-      const dados = snap.data();
-      setCheckins((dados?.checkins as Checkins) ?? {});
-      setIniciadaEm(dados?.iniciadaEm?.toDate?.() ?? null);
-    });
-
-    const nasEntregas = onSnapshot(
-      query(collection(db, "sessoes", codigo, "entregas"), orderBy("criadaEm", "asc")),
-      (snap) => setEntregas(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Entrega)),
+  const buscarTurma = useCallback(async (procurado: string) => {
+    const snap = await getDocs(
+      query(collection(db, "turmas"), where("codigo", "==", procurado.toUpperCase()), limit(1)),
     );
+    const achada = snap.docs[0];
+    return achada ? ({ id: achada.id, ...achada.data() } as Turma) : null;
+  }, []);
 
-    return () => {
-      naSessao();
-      nasEntregas();
-    };
-  }, [codigo]);
+  // Aluno que já usou este aparelho entra direto na turma dele.
+  useEffect(() => {
+    const guardado = localStorage.getItem(MEMORIA);
+    if (!guardado) return;
 
-  const ciclo = useMemo(
-    () => calcularCiclo(iniciadaEm, focoMin, pausaMin, agora),
-    [iniciadaEm, focoMin, pausaMin, agora],
-  );
-
-  async function gerarAtividade() {
-    setOcupado(true);
-    setErro("");
-    try {
-      const resposta = await fetch("/api/atividade", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pedido }),
-      });
-      const dados = await resposta.json();
-      if (!resposta.ok) throw new Error(dados.erro);
-      setAtividade(dados as Atividade);
-      setFocoMin(dados.duracaoMin ?? 10);
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Falhou. Tente de novo.");
-    } finally {
-      setOcupado(false);
-    }
-  }
-
-  async function abrirSala() {
-    if (!atividade) return;
-    setOcupado(true);
-    setErro("");
-
-    const novo = gerarCodigo();
-    try {
-      // O Firestore enfileira a escrita em silêncio quando não alcança o servidor.
-      // Numa sala de aula isso vira o professor olhando para um botão morto.
-      await Promise.race([
-        setDoc(doc(db, "sessoes", novo), {
-          atividade,
-          checkins: {},
-          focoMin,
-          pausaMin,
-          iniciadaEm: null,
-          criadaEm: serverTimestamp(),
-          expiraEm: new Date(Date.now() + DURACAO_SESSAO_MIN * 60_000),
-        }),
-        new Promise((_, rejeitar) =>
-          setTimeout(() => rejeitar(new Error("sem resposta do Firestore")), 8000),
-        ),
-      ]);
-      setCodigo(novo);
-    } catch {
-      setErro("Não consegui abrir a sala. Verifique a conexão e tente de novo.");
-    } finally {
-      setOcupado(false);
-    }
-  }
-
-  async function iniciarAula() {
-    if (!codigo) return;
-    await updateDoc(doc(db, "sessoes", codigo), {
-      focoMin,
-      pausaMin,
-      iniciadaEm: serverTimestamp(),
+    buscarTurma(guardado).then((achada) => {
+      if (!achada) return localStorage.removeItem(MEMORIA);
+      setPapel("aluno");
+      abrirTurma(achada);
     });
-  }
+  }, [buscarTurma, abrirTurma]);
 
-  async function gerarSintese() {
-    if (!atividade) return;
+  async function confirmarCodigo() {
     setOcupado(true);
+    setErro("");
     try {
-      const respostas = entregas
-        .map((e) => e.texto?.trim() || (e.imagem ? "[foto enviada pelo aluno]" : ""))
-        .filter(Boolean);
-      const resposta = await fetch("/api/sintese", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ atividade, respostas }),
-      });
-      setSintese((await resposta.json()).sintese ?? "");
+      const achada = await buscarTurma(codigo);
+      if (!achada) return setErro("Não achei nenhuma turma com esse código.");
+      if (papel === "aluno") localStorage.setItem(MEMORIA, achada.codigo);
+      await abrirTurma(achada);
     } finally {
       setOcupado(false);
     }
   }
 
-  async function encerrarEApagar() {
-    if (!codigo) return;
-    if (!confirm("Isso apaga a sala e todas as entregas. Confirma?")) return;
-
-    const entregasSnap = await getDocs(collection(db, "sessoes", codigo, "entregas"));
-    await Promise.all(entregasSnap.docs.map((d) => deleteDoc(d.ref)));
-    await deleteDoc(doc(db, "sessoes", codigo));
-
-    setCodigo(null);
-    setAtividade(null);
-    setEntregas([]);
-    setCheckins({});
-    setSintese("");
-    setPedido("");
-    setIniciadaEm(null);
+  function trocarTurma() {
+    localStorage.removeItem(MEMORIA);
+    setTurma(null);
+    setPessoas([]);
+    setCodigo("");
+    setEtapa("codigo");
   }
 
-  const totalCheckins = Object.values(checkins).reduce((a, b) => a + b, 0);
-  const link = codigo && typeof window !== "undefined" ? `${window.location.origin}/j/${codigo}` : "";
+  function voltarAoInicio() {
+    setTurma(null);
+    setPessoas([]);
+    setCodigo("");
+    setErro("");
+    setEtapa("escolha");
+  }
+
+  function entrar(pessoa: Pessoa) {
+    router.push(`/t/${turma!.id}/${pessoa.papel === "professor" ? "p" : "a"}/${pessoa.id}`);
+  }
+
+  if (etapa === "escolha") {
+    return (
+      <Moldura>
+        <div className="surgir">
+          <h1 className="text-5xl font-bold tracking-tight">Modo Aula</h1>
+          <p className="mt-4 max-w-md text-lg leading-relaxed text-suave">
+            O celular deixa de disputar a aula e passa a ser a ferramenta dela. Sem instalar nada,
+            sem rastrear ninguém.
+          </p>
+
+          <div className="mt-12 grid gap-4 sm:grid-cols-2">
+            <Porta
+              titulo="Sou professor"
+              descricao="Digite o código da sua turma para abrir a aula."
+              aoClicar={() => {
+                setPapel("professor");
+                setEtapa("codigo");
+              }}
+            />
+            <Porta
+              titulo="Sou aluno"
+              descricao="Entre uma vez e este aparelho lembra da sua turma."
+              aoClicar={() => {
+                setPapel("aluno");
+                setEtapa("codigo");
+              }}
+            />
+          </div>
+
+          <ul className="mt-14 space-y-2 text-sm text-suave">
+            <li>Sem senha e sem conta: seu perfil é só o seu nome e a sua foto.</li>
+            <li>O que você sente no check-in vira número da turma, nunca registro seu.</li>
+            <li>Funciona em qualquer celular, mesmo com internet fraca.</li>
+          </ul>
+        </div>
+      </Moldura>
+    );
+  }
+
+  if (etapa === "codigo") {
+    return (
+      <Moldura>
+        <div className="surgir w-full max-w-sm">
+          <button onClick={voltarAoInicio} className="text-sm text-suave hover:text-texto">
+            voltar
+          </button>
+
+          <h1 className="mt-6 text-3xl font-bold">Código da turma</h1>
+          <p className="mt-3 text-suave">
+            {papel === "professor"
+              ? "A escola entrega este código junto com a turma."
+              : "Você digita uma vez só. Depois este aparelho já sabe qual é a sua turma."}
+          </p>
+
+          <input
+            value={codigo}
+            onChange={(e) => setCodigo(e.target.value.toUpperCase().slice(0, 6))}
+            onKeyDown={(e) => e.key === "Enter" && codigo.length >= 4 && confirmarCodigo()}
+            placeholder="9AML"
+            autoFocus
+            className="mt-8 w-full rounded-2xl border border-borda bg-superficie px-6 py-5 text-center font-mono text-3xl tracking-[0.35em] outline-none transition focus:border-foco"
+          />
+
+          {erro && <p className="mt-4 text-sm text-alerta">{erro}</p>}
+
+          <button
+            onClick={confirmarCodigo}
+            disabled={ocupado || codigo.trim().length < 4}
+            className="mt-5 w-full rounded-2xl bg-foco px-6 py-4 text-lg font-semibold text-fundo transition disabled:opacity-30"
+          >
+            {ocupado ? "Procurando..." : "Entrar"}
+          </button>
+        </div>
+      </Moldura>
+    );
+  }
+
+  const professores = pessoas.filter((p) => p.papel === "professor");
+  const alunos = pessoas.filter((p) => p.papel === "aluno");
+  const visiveis = papel === "professor" ? professores : alunos;
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-6 py-12">
-      <header className="mb-10">
-        <h1 className="text-4xl font-bold tracking-tight">Modo Aula</h1>
-        <p className="mt-2 text-suave">
-          O celular do aluno vira a ferramenta da aula. Sem app, sem login, sem rastreio.
-        </p>
+    <main className="mx-auto w-full max-w-2xl px-6 py-14">
+      <header className="surgir mb-10">
+        <p className="text-sm text-suave">{escola?.nome}</p>
+        <h1 className="mt-1 text-3xl font-bold">{turma?.nome}</h1>
+        <p className="mt-2 font-mono text-sm tracking-[0.25em] text-foco">{turma?.codigo}</p>
       </header>
 
-      {!codigo && (
-        <section className="surgir space-y-5">
-          <label className="block text-sm font-medium" htmlFor="pedido">
-            O que você quer que a turma faça nesta aula?
-          </label>
-          <textarea
-            id="pedido"
-            value={pedido}
-            onChange={(e) => setPedido(e.target.value)}
-            rows={3}
-            placeholder="Ex.: quero que o 9º ano encontre exemplos de ângulo reto na sala e explique cada um"
-            className="w-full rounded-2xl border border-borda bg-superficie p-4 text-base outline-none transition focus:border-foco"
-          />
-          <button
-            onClick={gerarAtividade}
-            disabled={ocupado || pedido.trim().length < 3}
-            className="rounded-2xl bg-foco px-6 py-3 font-semibold text-fundo transition disabled:opacity-30"
-          >
-            {ocupado ? "Gerando..." : "Gerar atividade"}
+      <h2 className="mb-5 text-sm font-semibold uppercase tracking-[0.15em] text-suave">
+        {papel === "professor" ? "Quem está dando esta aula?" : "Quem é você?"}
+      </h2>
+
+      <ul className="surgir grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {visiveis.map((p) => (
+          <li key={p.id}>
+            <button
+              onClick={() => entrar(p)}
+              className="flex w-full flex-col items-center gap-3 rounded-2xl border border-borda bg-superficie p-5 text-center transition hover:border-foco"
+            >
+              <Avatar pessoa={p} tamanho="g" />
+              <span className="text-sm leading-tight">{p.nome}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-12 flex flex-wrap gap-4 text-sm text-suave">
+        <button onClick={voltarAoInicio} className="hover:text-texto">
+          Não é você?
+        </button>
+        {papel === "aluno" && (
+          <button onClick={trocarTurma} className="hover:text-texto">
+            Trocar de turma (precisa do código da nova)
           </button>
-          {erro && <p className="text-sm text-alerta">{erro}</p>}
-
-          {atividade && (
-            <div className="surgir rounded-3xl border border-borda bg-superficie p-6">
-              <h2 className="text-xl font-semibold">{atividade.titulo}</h2>
-              <p className="mt-2 text-texto/85">{atividade.instrucao}</p>
-              <p className="mt-4 text-xs uppercase tracking-[0.15em] text-suave">
-                {atividade.duracaoMin} min · resposta em {atividade.tipoResposta}
-              </p>
-              <p className="mt-3 text-sm text-suave">
-                <span className="text-texto">No celular do aluno:</span>{" "}
-                {atividade.ferramentas?.length
-                  ? FERRAMENTAS.filter((f) => atividade.ferramentas.includes(f.chave))
-                      .map((f) => f.rotulo.toLowerCase())
-                      .join(", ")
-                  : "nenhuma ferramenta extra"}
-              </p>
-              <p className="mt-2 text-sm text-suave">
-                <span className="text-texto">Boa resposta:</span> {atividade.criterio}
-              </p>
-              <div className="mt-6 flex flex-wrap gap-3">
-                <button
-                  onClick={abrirSala}
-                  disabled={ocupado}
-                  className="rounded-2xl bg-foco px-6 py-3 font-semibold text-fundo disabled:opacity-30"
-                >
-                  {ocupado ? "Abrindo..." : "Abrir sala"}
-                </button>
-                <button
-                  onClick={gerarAtividade}
-                  disabled={ocupado}
-                  className="rounded-2xl border border-borda px-6 py-3"
-                >
-                  Gerar outra
-                </button>
-              </div>
-            </div>
-          )}
-        </section>
-      )}
-
-      {codigo && atividade && (
-        <section className="surgir space-y-10">
-          <div className="flex flex-col items-center gap-4 rounded-3xl border border-borda bg-superficie p-8 text-center">
-            <div className="rounded-2xl bg-white p-3">
-              <QRCodeSVG value={link} size={168} />
-            </div>
-            <p className="font-mono text-5xl font-bold tracking-[0.2em]">{codigo}</p>
-            <p className="text-sm break-all text-suave">{link}</p>
-          </div>
-
-          <div className="rounded-3xl border border-borda bg-superficie p-6">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-suave">
-                  {ciclo.fase === "espera" ? "Aula não começou" : ciclo.fase}
-                </p>
-                <p
-                  className={`mt-1 font-mono text-4xl font-bold tabular-nums ${
-                    ciclo.fase === "pausa" ? "text-pausa" : "text-foco"
-                  }`}
-                >
-                  {formatarTempo(ciclo.restanteSeg)}
-                </p>
-              </div>
-              <button
-                onClick={iniciarAula}
-                className="rounded-2xl bg-foco px-6 py-3 font-semibold text-fundo"
-              >
-                {iniciadaEm ? "Recomeçar" : "Iniciar aula"}
-              </button>
-            </div>
-
-            <div className="mt-6 flex gap-4">
-              <Campo rotulo="Foco (min)" valor={focoMin} ao={setFocoMin} />
-              <Campo rotulo="Pausa (min)" valor={pausaMin} ao={setPausaMin} />
-            </div>
-            <p className="mt-4 text-xs text-suave">
-              Todos os celulares da turma seguem este relógio e entram na pausa juntos.
-            </p>
-          </div>
-
-          <div>
-            <h2 className="text-sm font-semibold uppercase tracking-[0.15em] text-suave">
-              Como a turma chegou
-            </h2>
-            {totalCheckins === 0 ? (
-              <p className="mt-3 text-sm text-suave/70">Aguardando os primeiros check-ins.</p>
-            ) : (
-              <ul className="mt-4 space-y-3">
-                {ESTADOS.map(({ chave, rotulo }) => {
-                  const n = checkins[chave] ?? 0;
-                  return (
-                    <li key={chave} className="flex items-center gap-3 text-sm">
-                      <span className="w-24 shrink-0 text-suave">{rotulo}</span>
-                      <span className="h-2 flex-1 overflow-hidden rounded-full bg-superficie-alta">
-                        <span
-                          className="block h-full rounded-full bg-foco transition-[width]"
-                          style={{ width: `${(n / totalCheckins) * 100}%` }}
-                        />
-                      </span>
-                      <span className="w-8 text-right tabular-nums text-suave">{n}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-            <p className="mt-4 text-xs text-suave/70">
-              Só o total da turma existe no banco. Não há registro por aluno.
-            </p>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold uppercase tracking-[0.15em] text-suave">
-                Entregas ({entregas.length})
-              </h2>
-              <button
-                onClick={gerarSintese}
-                disabled={ocupado || entregas.length === 0}
-                className="rounded-xl border border-borda px-4 py-2 text-sm disabled:opacity-30"
-              >
-                {ocupado ? "Lendo a turma..." : "Síntese da turma"}
-              </button>
-            </div>
-
-            {sintese && (
-              <p className="surgir mt-4 rounded-2xl border border-foco/30 bg-superficie p-5 leading-relaxed">
-                {sintese}
-              </p>
-            )}
-
-            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {entregas.map((e) => (
-                <div
-                  key={e.id}
-                  className="surgir overflow-hidden rounded-2xl border border-borda bg-superficie"
-                >
-                  {e.imagem ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={e.imagem} alt="Entrega anônima" className="aspect-square w-full object-cover" />
-                  ) : (
-                    <p className="p-3 text-sm">{e.texto}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <button
-            onClick={encerrarEApagar}
-            className="w-full rounded-2xl border border-alerta/40 px-5 py-4 font-medium text-alerta"
-          >
-            Encerrar aula e apagar tudo
-          </button>
-        </section>
-      )}
+        )}
+      </div>
     </main>
   );
 }
 
-function Campo({
-  rotulo,
-  valor,
-  ao,
+function Porta({
+  titulo,
+  descricao,
+  aoClicar,
 }: {
-  rotulo: string;
-  valor: number;
-  ao: (n: number) => void;
+  titulo: string;
+  descricao: string;
+  aoClicar: () => void;
 }) {
   return (
-    <label className="flex-1 text-xs text-suave">
-      {rotulo}
-      <input
-        type="number"
-        min={1}
-        max={60}
-        value={valor}
-        onChange={(e) => ao(Math.max(1, Number(e.target.value) || 1))}
-        className="mt-1 w-full rounded-xl border border-borda bg-fundo px-3 py-2 text-base text-texto outline-none focus:border-foco"
-      />
-    </label>
+    <button
+      onClick={aoClicar}
+      className="group rounded-3xl border border-borda bg-superficie p-7 text-left transition hover:border-foco"
+    >
+      <p className="text-xl font-semibold">{titulo}</p>
+      <p className="mt-2 text-sm leading-relaxed text-suave">{descricao}</p>
+      <span className="mt-5 inline-block text-sm text-foco opacity-0 transition group-hover:opacity-100">
+        entrar →
+      </span>
+    </button>
+  );
+}
+
+function Moldura({ children }: { children: React.ReactNode }) {
+  return (
+    <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col justify-center px-6 py-14">
+      {children}
+    </main>
   );
 }

@@ -1,4 +1,97 @@
+export type Papel = "professor" | "aluno";
+
+export interface Escola {
+  id: string;
+  nome: string;
+  cidade: string;
+}
+
+export interface Turma {
+  id: string;
+  escolaId: string;
+  nome: string;
+  codigo: string;
+  periodoMin: number;
+  focoMin: number;
+  pausaMin: number;
+}
+
+export interface Pessoa {
+  id: string;
+  nome: string;
+  papel: Papel;
+  cor: string;
+  foto?: string;
+}
+
+export type TipoAtividade =
+  | "quiz"
+  | "formulario"
+  | "entrega"
+  | "enquete"
+  | "nuvem"
+  | "coletiva";
+
 export type TipoResposta = "texto" | "foto";
+
+export interface Pergunta {
+  enunciado: string;
+  alternativas: string[];
+  correta: number;
+}
+
+export interface Atividade {
+  titulo: string;
+  tipo: TipoAtividade;
+  instrucao: string;
+  duracaoMin: number;
+  ferramentas: Ferramenta[];
+  perguntas?: Pergunta[];
+  campos?: string[];
+  tipoResposta?: TipoResposta;
+  criterio?: string;
+  opcoes?: string[];
+  palavrasPedidas?: number;
+}
+
+export interface Sessao {
+  atividade: Atividade | null;
+  focoAtivo: boolean;
+  iniciadaEm: Date | null;
+  focoMin: number;
+  pausaMin: number;
+  liberados: string[];
+}
+
+export interface Resposta {
+  id: string;
+  pessoaId: string;
+  nome: string;
+  tipo: TipoAtividade;
+  texto?: string;
+  imagem?: string;
+  respostas?: string[];
+  acertos?: number;
+  total?: number;
+  feedback?: string;
+  opcao?: number;
+  palavras?: string[];
+  peca?: string;
+}
+
+// Conta quantas vezes cada palavra apareceu, para a nuvem da turma.
+export function contarPalavras(listas: string[][]): { palavra: string; peso: number }[] {
+  const contagem = new Map<string, number>();
+
+  for (const palavra of listas.flat()) {
+    const limpa = palavra.trim().toLowerCase();
+    if (limpa) contagem.set(limpa, (contagem.get(limpa) ?? 0) + 1);
+  }
+
+  return [...contagem.entries()]
+    .map(([palavra, peso]) => ({ palavra, peso }))
+    .sort((a, b) => b.peso - a.peso);
+}
 
 export const FERRAMENTAS = [
   { chave: "calculadora", rotulo: "Calculadora" },
@@ -7,25 +100,6 @@ export const FERRAMENTAS = [
 ] as const;
 
 export type Ferramenta = (typeof FERRAMENTAS)[number]["chave"];
-
-export interface Atividade {
-  titulo: string;
-  instrucao: string;
-  tipoResposta: TipoResposta;
-  duracaoMin: number;
-  criterio: string;
-  // A atividade declara de que ferramentas ela precisa. O aluno não sai do Modo Aula
-  // atrás de app nenhum, então não há o que bloquear.
-  ferramentas: Ferramenta[];
-}
-
-export interface Entrega {
-  id: string;
-  tipo: TipoResposta;
-  texto?: string;
-  imagem?: string;
-  feedback?: string;
-}
 
 export const ESTADOS = [
   { chave: "animado", rotulo: "Animado" },
@@ -36,9 +110,8 @@ export const ESTADOS = [
 
 export type Estado = (typeof ESTADOS)[number]["chave"];
 
-// O check-in vive como contador agregado dentro da própria sessão.
-// Não existe documento por aluno: identificar quem respondeu o quê é
-// impossível pelo formato do dado, não por promessa de privacidade.
+// O check-in emocional continua sendo só contador agregado na turma.
+// A professora orquestra a sessão, mas nunca vê quem se sentiu o quê.
 export type Checkins = Partial<Record<Estado, number>>;
 
 export type Fase = "espera" | "foco" | "pausa";
@@ -48,7 +121,7 @@ export interface Ciclo {
   restanteSeg: number;
 }
 
-// O relógio da aula é um só: fica na sessão, e cada celular calcula em que ponto
+// O relógio da aula é um só: fica na turma, e cada celular calcula em que ponto
 // do ciclo está. Ninguém aperta play sozinho, a turma inteira entra e sai junto.
 export function calcularCiclo(
   iniciadaEm: Date | null,
@@ -74,6 +147,13 @@ export function formatarTempo(segundos: number): string {
   return `${mm}:${ss}`;
 }
 
+export function iniciais(nome: string): string {
+  const partes = nome.trim().split(/\s+/);
+  const primeira = partes[0]?.[0] ?? "";
+  const ultima = partes.length > 1 ? partes[partes.length - 1][0] : "";
+  return (primeira + ultima).toUpperCase();
+}
+
 export const CONVITES_DE_PAUSA = [
   "Levanta e estica o corpo.",
   "Olha pela janela, o mais longe que der.",
@@ -81,13 +161,3 @@ export const CONVITES_DE_PAUSA = [
   "Bebe um gole de água.",
   "Conversa com quem está do teu lado.",
 ];
-
-const ALFABETO = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-export function gerarCodigo(tamanho = 4): string {
-  const bytes = new Uint8Array(tamanho);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => ALFABETO[b % ALFABETO.length]).join("");
-}
-
-export const DURACAO_SESSAO_MIN = 90;
