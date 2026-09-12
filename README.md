@@ -103,3 +103,23 @@ npx vercel
 ```
 
 Configure as mesmas variáveis de ambiente no painel da Vercel.
+
+O app está publicado em https://modo-aula-five.vercel.app
+
+## Créditos de bibliotecas e serviços
+
+Conforme o item 9.2 do regulamento do HACKTUDO 2026. Toda a solução do desafio foi escrita para
+este hackathon, a partir do desafio anunciado em 11/09/2026; abaixo estão apenas as dependências
+de terceiros usadas, todas públicas e disponíveis a qualquer participante.
+
+| Biblioteca ou serviço | Para quê | Fonte |
+| --- | --- | --- |
+| Next.js 16 | Framework da aplicação e rotas de API | https://github.com/vercel/next.js |
+| React 19 | Interface | https://github.com/facebook/react |
+| Firebase (Firestore) | Banco em tempo real, que sincroniza o relógio da turma | https://github.com/firebase/firebase-js-sdk |
+| Google Gemini (`@google/genai`) | Gera as atividades, o retorno ao aluno, a síntese e as dicas do tutor | https://github.com/googleapis/js-genai |
+| qrcode.react | QR code da sala | https://github.com/zpao/qrcode.react |
+| Tailwind CSS 4 | Estilos | https://github.com/tailwindlabs/tailwindcss |
+| Vercel | Hospedagem | https://vercel.com |
+
+Fontes: Literata, IBM Plex Sans, IBM Plex Mono e Archivo, via Google Fonts (SIL Open Font License).
