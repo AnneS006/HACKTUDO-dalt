@@ -42,9 +42,6 @@ export default function PainelProfessor() {
   const [sintese, setSintese] = useState("");
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState("");
-  const [origem, setOrigem] = useState("");
-
-  useEffect(() => setOrigem(window.location.origin), []);
 
   useEffect(() => {
     const t = setInterval(() => setAgora(new Date()), 1000);
@@ -172,7 +169,7 @@ export default function PainelProfessor() {
   }
 
   const totalCheckins = Object.values(checkins).reduce((a, b) => a + b, 0);
-  const link = origem && codigo ? `${origem}/j/${codigo}` : "";
+  const link = codigo && typeof window !== "undefined" ? `${window.location.origin}/j/${codigo}` : "";
 
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-12">
