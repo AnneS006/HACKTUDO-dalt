@@ -345,15 +345,40 @@ export default function PainelProfessor() {
         </h2>
 
         {sessao.atividade && (
-          <div className="mb-5 rounded-2xl border border-foco/30 bg-superficie p-5">
-            <p className="text-xs uppercase tracking-[0.15em] text-foco">
-              no ar · {sessao.atividade.tipo}
+          <div
+            className={`mb-5 rounded-2xl border bg-superficie p-5 ${
+              sessao.focoAtivo ? "border-foco/30" : "border-pausa/40"
+            }`}
+          >
+            <p
+              className={`text-xs uppercase tracking-[0.15em] ${
+                sessao.focoAtivo ? "text-foco" : "text-pausa"
+              }`}
+            >
+              {sessao.focoAtivo ? "no ar" : "aguardando o foco"} · {sessao.atividade.tipo}
             </p>
             <p className="mt-2 text-lg font-semibold">{sessao.atividade.titulo}</p>
             <p className="mt-1 text-sm text-suave">{sessao.atividade.instrucao}</p>
-            <p className="mt-3 text-sm text-suave">
-              {respostas.length} de {alunos.length} entregaram
-            </p>
+
+            {sessao.focoAtivo ? (
+              <p className="mt-3 text-sm text-suave">
+                {respostas.length} de {alunos.length} entregaram
+              </p>
+            ) : (
+              // Publicar sem foco ligado nao chega em ninguem, e isso precisa
+              // ficar obvio: o professor nao tem como ver a tela dos alunos.
+              <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-borda pt-4">
+                <p className="flex-1 text-sm text-pausa">
+                  A turma não está em foco, então ninguém está vendo esta atividade.
+                </p>
+                <button
+                  onClick={ativarFoco}
+                  className="rounded-xl bg-foco px-5 py-2.5 text-sm font-semibold text-fundo"
+                >
+                  Colocar turma em foco
+                </button>
+              </div>
+            )}
           </div>
         )}
 
