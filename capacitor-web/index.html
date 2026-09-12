@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Modo Aula</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        background: #0a0f14;
+        color: #8ba3b5;
+        font-family: system-ui, sans-serif;
+        text-align: center;
+        padding: 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      A casca nativa abre o site publicado (server.url no capacitor.config.ts),
+      então esta página só aparece se o aparelho estiver sem internet no
+      primeiro carregamento. Ela existe para o webDir não apontar para public/,
+      que o Capacitor copiaria inteira para dentro do APK.
+    -->
+    <p>Sem conexão. O Modo Aula precisa de internet para abrir a aula.</p>
+  </body>
+</html>

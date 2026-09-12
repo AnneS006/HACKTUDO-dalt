@@ -6,7 +6,9 @@ import type { CapacitorConfig } from "@capacitor/cli";
 const config: CapacitorConfig = {
   appId: "app.modoaula",
   appName: "Modo Aula",
-  webDir: "public",
+  // Não apontar para public/: o Capacitor copia essa pasta inteira para dentro
+  // do APK, e é de lá que o APK é distribuído.
+  webDir: "capacitor-web",
   server: {
     url: "https://modo-aula-five.vercel.app",
     cleartext: false,
