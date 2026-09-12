@@ -90,6 +90,7 @@ export default function PainelProfessor() {
         focoMin: d.focoMin ?? 10,
         pausaMin: d.pausaMin ?? 3,
         liberados: (d.liberados as string[]) ?? [],
+        publicadaEm: d.publicadaEm?.toDate?.() ?? null,
       });
       setCheckins((d.checkins as Checkins) ?? {});
     });
@@ -125,7 +126,14 @@ export default function PainelProfessor() {
   const responderam = new Set(respostas.map((r) => r.pessoaId));
 
   async function ativarFoco() {
-    await updateDoc(sessaoRef, { focoAtivo: true, iniciadaEm: serverTimestamp(), liberados: [] });
+    // Cada aula comeca com o termometro limpo: somar os check-ins de ontem
+    // transformaria "como a turma chegou hoje" em historico sem sentido.
+    await updateDoc(sessaoRef, {
+      focoAtivo: true,
+      iniciadaEm: serverTimestamp(),
+      liberados: [],
+      checkins: {},
+    });
   }
 
   async function encerrarFoco() {
@@ -191,7 +199,7 @@ export default function PainelProfessor() {
   async function publicar(atividade: Atividade) {
     const antigas = await getDocs(collection(sessaoRef, "respostas"));
     await Promise.all(antigas.docs.map((d) => deleteDoc(d.ref)));
-    await updateDoc(sessaoRef, { atividade });
+    await updateDoc(sessaoRef, { atividade, publicadaEm: serverTimestamp() });
 
     // Guardar na própria turma deixa a atividade pronta para reenviar depois
     // sem depender da IA responder de novo.

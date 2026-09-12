@@ -63,6 +63,10 @@ export interface Sessao {
   focoMin: number;
   pausaMin: number;
   liberados: string[];
+  // Muda a cada envio, inclusive quando a mesma atividade e reenviada. E o que
+  // diz ao aluno que comecou uma rodada nova; o titulo nao serve, porque
+  // reenviar uma atividade salva repete o titulo.
+  publicadaEm: Date | null;
 }
 
 export interface Resposta {

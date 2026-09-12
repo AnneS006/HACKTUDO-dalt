@@ -54,6 +54,13 @@ export default function TelaDoAluno() {
 
   const sessaoRef = useMemo(() => doc(db, "turmas", turmaId, "sessao", "atual"), [turmaId]);
 
+  // O celular mata aba em segundo plano o tempo todo. Sem marcar no aparelho
+  // qual aula ja foi respondida, recarregar soma o check-in de novo e o
+  // termometro da turma passa a mentir.
+  const chaveCheckin = sessao?.iniciadaEm
+    ? `modo-aula:checkin:${turmaId}:${sessao.iniciadaEm.getTime()}`
+    : null;
+
   useEffect(() => {
     getDoc(doc(db, "turmas", turmaId)).then((s) => setTurma({ id: s.id, ...s.data() } as Turma));
     getDoc(doc(db, "turmas", turmaId, "pessoas", pessoaId)).then((s) =>
@@ -72,13 +79,14 @@ export default function TelaDoAluno() {
         focoMin: d.focoMin ?? 10,
         pausaMin: d.pausaMin ?? 3,
         liberados: (d.liberados as string[]) ?? [],
+        publicadaEm: d.publicadaEm?.toDate?.() ?? null,
       };
       setSessao((antiga) => {
         if (antiga?.focoAtivo && !nova.focoAtivo) {
           setCheckinFeito(false);
           setTravado(false);
         }
-        if (antiga?.atividade?.titulo !== nova.atividade?.titulo) {
+        if (antiga?.publicadaEm?.getTime() !== nova.publicadaEm?.getTime()) {
           setEntregue(false);
           setFeedback("");
         }
@@ -92,7 +100,21 @@ export default function TelaDoAluno() {
     return () => clearInterval(t);
   }, []);
 
+  useEffect(() => {
+    if (chaveCheckin && localStorage.getItem(chaveCheckin)) setCheckinFeito(true);
+  }, [chaveCheckin]);
+
   const tipoAtual = sessao?.atividade?.tipo;
+  const rodadaAtual = sessao?.publicadaEm?.getTime();
+
+  // Recarregar nao pode devolver a atividade para quem ja entregou: no quiz,
+  // isso seria refazer a prova sabendo as respostas.
+  useEffect(() => {
+    if (!rodadaAtual) return;
+    getDoc(doc(sessaoRef, "respostas", pessoaId)).then((s) => {
+      if (s.exists()) setEntregue(true);
+    });
+  }, [sessaoRef, pessoaId, rodadaAtual]);
 
   useEffect(() => {
     if (!tipoAtual || !COLETIVOS.includes(tipoAtual)) return;
@@ -176,8 +198,9 @@ export default function TelaDoAluno() {
   }, [soltarFoco]);
 
   async function registrarCheckin(estado: Estado | null) {
-    if (estado) await updateDoc(sessaoRef, { [`checkins.${estado}`]: increment(1) });
     setCheckinFeito(true);
+    if (chaveCheckin) localStorage.setItem(chaveCheckin, "1");
+    if (estado) await updateDoc(sessaoRef, { [`checkins.${estado}`]: increment(1) });
   }
 
   async function enviar(dados: {
@@ -319,54 +342,66 @@ export default function TelaDoAluno() {
     );
   }
 
-  if (ciclo.fase === "pausa") {
-    return (
-      <main className="flex min-h-dvh flex-col items-center justify-center px-6 text-center">
+  // A pausa cobre a tela em vez de substituí-la: trocar de tela desmontaria a
+  // atividade, e o aluno voltaria da pausa na pergunta 1 de um quiz que já
+  // estava na 4.
+  const pausa =
+    ciclo.fase === "pausa" ? (
+      <div className="surgir fixed inset-0 z-50 flex flex-col items-center justify-center bg-fundo px-6 text-center">
         <p className="text-sm uppercase tracking-[0.2em] text-pausa">Pausa</p>
         <p className="mt-6 font-mono text-7xl font-bold tabular-nums text-pausa">
           {formatarTempo(ciclo.restanteSeg)}
         </p>
         <p className="mt-8 max-w-xs text-2xl leading-snug">{convite}</p>
         <p className="mt-8 text-sm text-suave">Guarda o celular até a aula voltar.</p>
-      </main>
-    );
-  }
+      </div>
+    ) : null;
 
   if (entregue && sessao.atividade && COLETIVOS.includes(sessao.atividade.tipo)) {
     return (
-      <main className="mx-auto w-full max-w-lg px-5 py-8">
-        <p className="text-xs uppercase tracking-[0.2em] text-foco">A turma até agora</p>
-        <h1 className="mt-2 text-2xl font-bold">{sessao.atividade.titulo}</h1>
-        <div className="mt-8">
-          <VistaColetiva atividade={sessao.atividade} respostas={respostas} />
-        </div>
-      </main>
+      <>
+        <main className="mx-auto w-full max-w-lg px-5 py-8">
+          <p className="text-xs uppercase tracking-[0.2em] text-foco">A turma até agora</p>
+          <h1 className="mt-2 text-2xl font-bold">{sessao.atividade.titulo}</h1>
+          <div className="mt-8">
+            <VistaColetiva atividade={sessao.atividade} respostas={respostas} />
+          </div>
+        </main>
+        {pausa}
+      </>
     );
   }
 
   if (entregue) {
     return (
-      <Centro>
-        <p className="text-sm uppercase tracking-[0.2em] text-foco">Entregue</p>
-        {feedback && <p className="mt-6 text-lg leading-relaxed">{feedback}</p>}
-        <p className="mt-8 text-suave">Espere a próxima atividade da aula.</p>
-      </Centro>
+      <>
+        <Centro>
+          <p className="text-sm uppercase tracking-[0.2em] text-foco">Entregue</p>
+          {feedback && <p className="mt-6 text-lg leading-relaxed">{feedback}</p>}
+          <p className="mt-8 text-suave">Espere a próxima atividade da aula.</p>
+        </Centro>
+        {pausa}
+      </>
     );
   }
 
   if (!sessao.atividade) {
     return (
-      <Centro>
-        <p className="font-mono text-4xl font-bold tabular-nums text-foco">
-          {formatarTempo(ciclo.restanteSeg)}
-        </p>
-        <h1 className="mt-6 text-2xl font-bold">Modo aula ligado</h1>
-        <p className="mt-3 text-suave">A atividade ainda não foi enviada.</p>
-      </Centro>
+      <>
+        <Centro>
+          <p className="font-mono text-4xl font-bold tabular-nums text-foco">
+            {formatarTempo(ciclo.restanteSeg)}
+          </p>
+          <h1 className="mt-6 text-2xl font-bold">Modo aula ligado</h1>
+          <p className="mt-3 text-suave">A atividade ainda não foi enviada.</p>
+        </Centro>
+        {pausa}
+      </>
     );
   }
 
   return (
+    <>
     <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col px-5 pb-8 pt-6">
       <div className="flex items-baseline justify-between">
         <span className="text-xs uppercase tracking-[0.2em] text-foco">Foco</span>
@@ -415,6 +450,8 @@ export default function TelaDoAluno() {
         />
       </div>
     </main>
+    {pausa}
+    </>
   );
 }
 

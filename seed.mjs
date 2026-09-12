@@ -112,6 +112,7 @@ for (const turma of turmas) {
     atividade: null,
     focoAtivo: false,
     iniciadaEm: null,
+    publicadaEm: null,
     focoMin: turma.focoMin,
     pausaMin: turma.pausaMin,
     liberados: [],
