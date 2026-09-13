@@ -24,6 +24,33 @@ export interface Pessoa {
   foto?: string;
   // Só para quem dá aula: contextualiza a atividade que a IA escreve.
   materia?: string;
+  // Só para aluno: reconhecimento e progressão.
+  medalhas?: string[];
+  entregas?: number;
+  enfeite?: string;
+}
+
+// Reconhecimento que a professora dá na mão, por comportamento que nota em
+// sala. Não são pontos e não se comparam entre alunos de propósito: ranking
+// público castiga justamente quem já vai mal.
+export const MEDALHAS = [
+  { id: "proativo", nome: "Participação", enfeite: "🙋", descricao: "Participa e puxa a turma junto" },
+  { id: "evolucao", nome: "Evolução", enfeite: "📈", descricao: "Avançou muito em relação a si mesmo" },
+  { id: "perguntas", nome: "Boas perguntas", enfeite: "💡", descricao: "Pergunta o que ajuda a turma inteira" },
+  { id: "cuidado", nome: "Cuidado", enfeite: "🤝", descricao: "Ajudou um colega sem ninguém pedir" },
+] as const;
+
+// Enfeites de avatar liberados por entrega feita. Não custam nada: a ideia é
+// marcar percurso, não criar moeda dentro da aula.
+export const ENFEITES = [
+  { enfeite: "🧢", nome: "Boné", exige: 2 },
+  { enfeite: "🕶️", nome: "Óculos", exige: 4 },
+  { enfeite: "👑", nome: "Coroa", exige: 6 },
+  { enfeite: "✨", nome: "Brilho", exige: 8 },
+] as const;
+
+export function medalhaPor(id: string) {
+  return MEDALHAS.find((m) => m.id === id);
 }
 
 export type TipoAtividade =

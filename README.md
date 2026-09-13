@@ -104,7 +104,7 @@ npx vercel
 
 Configure as mesmas variáveis de ambiente no painel da Vercel.
 
-O app está publicado em https://modo-aula-five.vercel.app
+O app está publicado em https://modo-aula-dalt.vercel.app
 
 ## Créditos de bibliotecas e serviços
 
