@@ -15,11 +15,13 @@ import {
   ChevronRight,
   GraduationCap,
   Plus,
+  Smartphone,
   UserSquare2,
   Users,
   type LucideIcon,
 } from "lucide-react";
 import { db } from "@/lib/firebase";
+import { temCascaNativa } from "@/lib/foco-nativo";
 import { Avatar } from "@/components/avatar";
 import {
   RECOMPENSAS_INICIAIS,
@@ -44,6 +46,10 @@ export default function Entrada() {
   const router = useRouter();
 
   const [etapa, setEtapa] = useState<Etapa>("escolha");
+  // Quem já está dentro do aplicativo não precisa ver o convite para instalar
+  // o aplicativo. A checagem só existe no navegador, então entra por efeito:
+  // assim o HTML do servidor e o da tela não divergem.
+  const [oferecerApp, setOferecerApp] = useState(false);
   const [papel, setPapel] = useState<Papel>("aluno");
 
   const [codigo, setCodigo] = useState("");
@@ -240,6 +246,10 @@ export default function Entrada() {
     setCriando(false);
   }
 
+  useEffect(() => {
+    setOferecerApp(!temCascaNativa());
+  }, []);
+
   if (etapa === "escolha") {
     return (
       <Moldura>
@@ -284,6 +294,29 @@ export default function Entrada() {
               </li>
             ))}
           </ul>
+
+          {/* O site já é o app: dá para usar tudo pelo navegador. O APK existe
+              porque só dentro dele o Android deixa fixar a tela no foco. */}
+          {oferecerApp && (
+            <a
+              href="/modo-aula.apk"
+              download
+              className="mt-10 flex items-center gap-3 rounded-2xl border border-borda bg-superficie p-4 text-left transition hover:border-foco/40"
+            >
+              <Smartphone
+                size={20}
+                strokeWidth={1.75}
+                className="shrink-0 text-foco"
+                aria-hidden="true"
+              />
+              <span className="text-sm leading-relaxed">
+                <span className="font-semibold">Baixar o app Android</span>
+                <span className="block text-suave">
+                  No aplicativo, o foco fixa a tela do celular. No navegador funciona tudo, menos isso.
+                </span>
+              </span>
+            </a>
+          )}
         </div>
       </Moldura>
     );
