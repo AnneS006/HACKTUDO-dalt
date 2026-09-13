@@ -99,7 +99,8 @@ function identificador(nome) {
 const lote = writeBatch(db);
 
 for (const escola of escolas) {
-  lote.set(doc(db, "escolas", escola.id), { nome: escola.nome, cidade: escola.cidade });
+  const { id, ...dadosDaEscola } = escola;
+  lote.set(doc(db, "escolas", id), dadosDaEscola);
 }
 
 let totalPessoas = 0;
