@@ -117,11 +117,13 @@ export function medalhaPor(id: string) {
 
 /**
  * Entrega vale XP fixo; acerto vale mais. Assim quem se dedica ao conteúdo
- * avança mais rápido que quem só clica em enviar.
+ * avança mais rápido que quem só clica em enviar. A base vem da atividade
+ * quando quem deu a aula escolheu um valor.
  */
-export function xpDaEntrega(acertos?: number, total?: number): number {
-  if (!total) return XP_POR_ENTREGA;
-  return XP_POR_ENTREGA + Math.round((acertos ?? 0) / total * XP_POR_ENTREGA);
+export function xpDaEntrega(acertos?: number, total?: number, base = XP_POR_ENTREGA): number {
+  const valor = base > 0 ? base : XP_POR_ENTREGA;
+  if (!total) return valor;
+  return valor + Math.round((acertos ?? 0) / total * valor);
 }
 
 export type TipoAtividade =
@@ -152,6 +154,9 @@ export interface Atividade {
   criterio?: string;
   opcoes?: string[];
   palavrasPedidas?: number;
+  // Quanto a entrega desta atividade vale. Quem dá a aula escolhe na hora de
+  // criar; sem isso vale o padrão.
+  xp?: number;
 }
 
 export interface Sessao {

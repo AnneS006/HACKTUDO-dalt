@@ -299,7 +299,7 @@ export default function TelaDoAluno() {
     }).catch((e) => console.error("entrega pendente de sincronização", e));
 
     // Conta o percurso do aluno: entregas liberam enfeite, XP compra recompensa.
-    const ganho = xpDaEntrega(dados.acertos, dados.total);
+    const ganho = xpDaEntrega(dados.acertos, dados.total, sessao.atividade.xp);
     const entregasAgora = (eu.entregas ?? 0) + 1;
 
     // Medalhas que o app dá sozinho, por fato registrado.
@@ -607,7 +607,7 @@ function Quiz({
         return;
       }
       const acertos = novas.filter((e, i) => e === perguntas[i].correta).length;
-      aoEnviar({ acertos, total: perguntas.length, respostas: [] });
+      aoEnviar({ acertos, total: perguntas.length, respostas: novas.map(String) });
     }, 900);
   }
 
