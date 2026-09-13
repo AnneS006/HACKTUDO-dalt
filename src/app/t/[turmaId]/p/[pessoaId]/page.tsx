@@ -367,9 +367,12 @@ export default function PainelProfessor() {
       </section>
 
       <section className="mt-8">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.15em] text-suave">
+        <h2 className="text-sm font-semibold uppercase tracking-[0.15em] text-suave">
           Turma ({alunos.length})
         </h2>
+        <p className="mb-4 mt-1 text-xs text-suave">
+          Passe o código {turma.codigo} no quadro e entregue a cada aluno o PIN dele.
+        </p>
         <ul className="grid gap-2 sm:grid-cols-2">
           {alunos.map((a) => {
             const liberado = sessao.liberados.includes(a.id);
@@ -390,6 +393,8 @@ export default function PainelProfessor() {
                     )}
                   </p>
                   <p className="text-xs text-suave">
+                    {a.pin && <span className="font-mono text-foco">{a.pin}</span>}
+                    {a.pin && " · "}
                     {!sessao.focoAtivo ? "livre" : liberado ? "fora do foco" : "em foco"}
                     {responderam.has(a.id) && " · entregou"}
                   </p>

@@ -139,11 +139,20 @@ for (const turma of turmas) {
   let alunoIndice = 0;
 
   gente.forEach((pessoa, indice) => {
-    const percurso = pessoa.papel === "aluno" ? percursos[alunoIndice++ % percursos.length] : {};
+    let extra = {};
+
+    if (pessoa.papel === "aluno") {
+      const posicao = alunoIndice++;
+      extra = {
+        ...percursos[posicao % percursos.length],
+        // Distintos e fáceis de ditar em sala: 0101, 0202, 0303...
+        pin: String(posicao + 1).padStart(2, "0").repeat(2),
+      };
+    }
 
     lote.set(doc(db, "turmas", id, "pessoas", identificador(pessoa.nome)), {
       ...pessoa,
-      ...percurso,
+      ...extra,
       cor: CORES[indice % CORES.length],
     });
     totalPessoas += 1;

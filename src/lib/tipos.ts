@@ -25,7 +25,9 @@ export interface Pessoa {
   foto?: string;
   // Só para quem dá aula: contextualiza a atividade que a IA escreve.
   materia?: string;
-  // Só para aluno: reconhecimento e progressão.
+  // Só para aluno: PIN de 4 dígitos que a escola entrega, reconhecimento e
+  // progressão. O PIN não é conta: não tem e-mail, cadastro nem recuperação.
+  pin?: string;
   medalhas?: string[];
   entregas?: number;
   enfeite?: string;
