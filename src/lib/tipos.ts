@@ -78,8 +78,23 @@ export const ENFEITES = [
   { enfeite: "✨", nome: "Brilho", exige: 8 },
 ] as const;
 
+// Estas o app dá sozinho, por fato registrado: não dependem de alguém notar.
+export const MEDALHAS_AUTOMATICAS = [
+  { id: "assiduo", nome: "Entrega sempre", enfeite: "🔥", descricao: "Chegou a cinco entregas" },
+  { id: "desempenho", nome: "Bom desempenho", enfeite: "🎯", descricao: "Acertou 80% ou mais de um quiz" },
+] as const;
+
 export function medalhaPor(id: string) {
-  return MEDALHAS.find((m) => m.id === id);
+  return [...MEDALHAS, ...MEDALHAS_AUTOMATICAS].find((m) => m.id === id);
+}
+
+/**
+ * Entrega vale XP fixo; acerto vale mais. Assim quem se dedica ao conteúdo
+ * avança mais rápido que quem só clica em enviar.
+ */
+export function xpDaEntrega(acertos?: number, total?: number): number {
+  if (!total) return XP_POR_ENTREGA;
+  return XP_POR_ENTREGA + Math.round((acertos ?? 0) / total * XP_POR_ENTREGA);
 }
 
 export type TipoAtividade =

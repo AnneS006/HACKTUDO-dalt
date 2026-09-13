@@ -14,6 +14,14 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import {
+  Award,
+  BarChart3,
+  LayoutDashboard,
+  LogOut,
+  ShoppingBag,
+  Sparkles,
+} from "lucide-react";
 import { Avatar } from "@/components/avatar";
 import { VistaColetiva } from "@/components/coletivo";
 import {
@@ -45,6 +53,16 @@ const TIPOS: { chave: TipoAtividade; rotulo: string; dica: string }[] = [
 
 const COLETIVOS = ["enquete", "nuvem", "coletiva"];
 
+const ABAS = [
+  { chave: "dashboard", rotulo: "Painel da turma", icone: LayoutDashboard },
+  { chave: "tarefa", rotulo: "Criar tarefa", icone: Sparkles },
+  { chave: "desempenho", rotulo: "Desempenho", icone: BarChart3 },
+  { chave: "medalhas", rotulo: "Atribuir medalha", icone: Award },
+  { chave: "lojinha", rotulo: "Lojinha", icone: ShoppingBag },
+] as const;
+
+type AbaProfessor = (typeof ABAS)[number]["chave"];
+
 export default function PainelProfessor() {
   const { turmaId, pessoaId } = useParams<{ turmaId: string; pessoaId: string }>();
   const router = useRouter();
@@ -61,6 +79,7 @@ export default function PainelProfessor() {
   const [pedido, setPedido] = useState("");
   const [rascunho, setRascunho] = useState<Atividade | null>(null);
   const [salvas, setSalvas] = useState<Atividade[]>([]);
+  const [aba, setAba] = useState<AbaProfessor>("dashboard");
   const [alunoParaMedalha, setAlunoParaMedalha] = useState<Pessoa | null>(null);
   const [recompensas, setRecompensas] = useState<Recompensa[]>([]);
   const [novaRecompensa, setNovaRecompensa] = useState({ titulo: "", custo: "200", enfeite: "🎁" });
@@ -290,12 +309,20 @@ export default function PainelProfessor() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-6 py-10">
-      <header className="mb-8 flex items-center gap-4">
-        <Avatar pessoa={eu} tamanho="m" />
+    <div className="flex min-h-dvh">
+      {/* Lateral no computador, barra rolável no celular. */}
+      <aside className="hidden w-64 shrink-0 flex-col justify-between border-r border-borda bg-superficie md:flex">
         <div>
-          <div className="flex items-center gap-2 text-sm text-suave">
-            <span>{eu.nome}</span>
+          <div className="flex items-center gap-3 border-b border-borda p-5">
+            <Avatar pessoa={eu} tamanho="m" />
+            <div className="min-w-0">
+              <p className="truncate text-xs text-suave">{eu.nome}</p>
+              <p className="truncate font-titulo text-base font-bold">{turma.nome}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between px-5 py-4">
+            <span className="font-mono text-sm tracking-[0.2em] text-foco">{turma.codigo}</span>
             {editandoMateria ? (
               <input
                 value={materia}
@@ -304,31 +331,74 @@ export default function PainelProfessor() {
                 onKeyDown={(e) => e.key === "Enter" && salvarMateria()}
                 placeholder="Matemática"
                 autoFocus
-                className="w-36 rounded-lg border border-foco bg-fundo px-2 py-1 text-sm text-texto outline-none"
+                className="w-28 rounded-lg border border-foco bg-fundo px-2 py-1 text-xs text-texto outline-none"
               />
             ) : (
               <button
                 onClick={() => setEditandoMateria(true)}
-                className="rounded-lg px-2 py-1 transition hover:text-texto"
+                className="text-xs text-suave transition hover:text-texto"
               >
-                {eu.materia ? `· ${eu.materia}` : "+ matéria"}
+                {eu.materia || "+ matéria"}
               </button>
             )}
           </div>
-          <h1 className="text-2xl font-bold">{turma.nome}</h1>
+
+          <nav className="flex flex-col gap-1 px-3">
+            {ABAS.map(({ chave, rotulo, icone: Icone }) => (
+              <button
+                key={chave}
+                onClick={() => setAba(chave)}
+                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${
+                  aba === chave
+                    ? "bg-foco/10 text-foco"
+                    : "text-suave hover:bg-superficie-alta hover:text-texto"
+                }`}
+              >
+                <Icone size={18} strokeWidth={1.75} aria-hidden="true" />
+                {rotulo}
+              </button>
+            ))}
+          </nav>
         </div>
-        <span className="ml-auto rounded-xl border border-borda px-3 py-2 font-mono text-sm tracking-[0.2em] text-foco">
-          {turma.codigo}
-        </span>
+
         <button
           onClick={sair}
-          className="rounded-xl border border-borda px-4 py-2 text-sm text-suave transition hover:border-alerta hover:text-alerta"
+          className="m-3 flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-suave transition hover:bg-superficie-alta hover:text-alerta"
         >
-          Sair
+          <LogOut size={16} aria-hidden="true" />
+          Encerrar sessão
         </button>
-      </header>
+      </aside>
 
-      <section className="rounded-3xl border border-borda bg-superficie p-6">
+      <main className="min-w-0 flex-1 px-6 py-8">
+        <header className="mb-6 flex items-center gap-3 md:hidden">
+          <Avatar pessoa={eu} tamanho="p" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs text-suave">{eu.nome}</p>
+            <p className="truncate font-titulo text-lg font-bold">{turma.nome}</p>
+          </div>
+          <span className="font-mono text-sm tracking-[0.2em] text-foco">{turma.codigo}</span>
+          <button onClick={sair} className="text-sm text-suave" title="Sair">
+            <LogOut size={18} aria-hidden="true" />
+          </button>
+        </header>
+
+        <nav className="-mx-6 mb-8 flex gap-1 overflow-x-auto px-6 md:hidden">
+          {ABAS.map(({ chave, rotulo, icone: Icone }) => (
+            <button
+              key={chave}
+              onClick={() => setAba(chave)}
+              className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm transition ${
+                aba === chave ? "bg-foco/10 text-foco" : "text-suave"
+              }`}
+            >
+              <Icone size={16} strokeWidth={1.75} aria-hidden="true" />
+              {rotulo}
+            </button>
+          ))}
+        </nav>
+
+      <section className={`rounded-3xl border border-borda bg-superficie p-6 ${aba === "dashboard" ? "" : "hidden"}`}>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-suave">
@@ -366,7 +436,7 @@ export default function PainelProfessor() {
         </div>
       </section>
 
-      <section className="mt-8">
+      <section className={`mt-8 ${aba === "dashboard" ? "" : "hidden"}`}>
         <h2 className="text-sm font-semibold uppercase tracking-[0.15em] text-suave">
           Turma ({alunos.length})
         </h2>
@@ -464,9 +534,9 @@ export default function PainelProfessor() {
         </div>
       )}
 
-      <section className="mt-10">
+      <section className={`mt-2 ${aba === "tarefa" ? "" : "hidden"}`}>
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.15em] text-suave">
-          Atividade
+          Criar tarefa
         </h2>
 
         {sessao.atividade && (
@@ -632,7 +702,7 @@ export default function PainelProfessor() {
       </section>
 
       {respostas.length > 0 && (
-        <section className="mt-10">
+        <section className={`mt-10 ${aba === "tarefa" ? "" : "hidden"}`}>
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold uppercase tracking-[0.15em] text-suave">
               Respostas ({respostas.length})
@@ -682,7 +752,7 @@ export default function PainelProfessor() {
         </section>
       )}
 
-      <section className="mt-10">
+      <section className={`mt-2 ${aba === "lojinha" ? "" : "hidden"}`}>
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.15em] text-suave">
           Lojinha da turma
         </h2>
@@ -753,7 +823,7 @@ export default function PainelProfessor() {
         </ul>
       </section>
 
-      <section className="mt-10">
+      <section className={`mt-10 ${aba === "dashboard" ? "" : "hidden"}`}>
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.15em] text-suave">
           Como a turma chegou
         </h2>
@@ -782,7 +852,137 @@ export default function PainelProfessor() {
           Só o total da turma existe no banco. Não há registro de humor por aluno.
         </p>
       </section>
-    </main>
+
+      <section className={`mt-10 ${aba === "dashboard" ? "" : "hidden"}`}>
+        <h2 className="mb-1 text-sm font-semibold uppercase tracking-[0.15em] text-suave">
+          Engajamento
+        </h2>
+        <p className="mb-4 text-xs text-suave">
+          Quem vem entregando, para você saber quem reconhecer.
+        </p>
+        <ol className="space-y-1.5">
+          {[...alunos]
+            .sort((a, b) => (b.xp ?? 0) - (a.xp ?? 0))
+            .map((a, posicao) => (
+              <li key={a.id} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm">
+                <span className="w-5 shrink-0 text-center font-mono text-xs text-suave">
+                  {posicao + 1}
+                </span>
+                <Avatar pessoa={a} tamanho="p" />
+                <span className="min-w-0 flex-1 truncate">{a.nome}</span>
+                <span className="shrink-0 font-mono text-xs text-foco">{a.xp ?? 0} XP</span>
+              </li>
+            ))}
+        </ol>
+      </section>
+
+      <section className={`mt-2 ${aba === "desempenho" ? "" : "hidden"}`}>
+        <h2 className="mb-1 text-sm font-semibold uppercase tracking-[0.15em] text-suave">
+          Desempenho da turma
+        </h2>
+        <p className="mb-5 text-xs text-suave">
+          Acertos dos quizzes já aplicados. Serve para decidir o que revisar.
+        </p>
+        <Desempenho alunos={alunos} respostas={respostas} atividade={sessao.atividade} />
+      </section>
+
+      <section className={`mt-2 ${aba === "medalhas" ? "" : "hidden"}`}>
+        <h2 className="mb-1 text-sm font-semibold uppercase tracking-[0.15em] text-suave">
+          Atribuir medalha
+        </h2>
+        <p className="mb-5 text-xs text-suave">
+          Reconhecimento que só você vê em sala. Entrega e bom desempenho o app já dá sozinho.
+        </p>
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {alunos.map((a) => (
+            <li key={a.id}>
+              <button
+                onClick={() => setAlunoParaMedalha(a)}
+                className="flex w-full items-center gap-3 rounded-2xl border border-borda bg-superficie p-3 text-left transition hover:border-foco"
+              >
+                <Avatar pessoa={a} tamanho="p" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm">{a.nome}</span>
+                  <span className="block text-xs text-suave">
+                    {(a.medalhas?.length ?? 0) === 0
+                      ? "sem reconhecimento ainda"
+                      : a.medalhas!.map((id) => medalhaPor(id)?.enfeite).join(" ")}
+                  </span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
+      </main>
+    </div>
+  );
+}
+
+// Acertos reais dos quizzes, não estimativa: o que a turma errou é o que
+// merece revisão na próxima aula.
+function Desempenho({
+  alunos,
+  respostas,
+  atividade,
+}: {
+  alunos: Pessoa[];
+  respostas: Resposta[];
+  atividade: Atividade | null;
+}) {
+  const comNota = respostas.filter((r) => r.total);
+
+  if (comNota.length === 0) {
+    return (
+      <p className="text-sm text-suave">
+        Ainda sem quiz respondido. Aplique um quiz e os acertos da turma aparecem aqui.
+      </p>
+    );
+  }
+
+  const acertos = comNota.reduce((soma, r) => soma + (r.acertos ?? 0), 0);
+  const total = comNota.reduce((soma, r) => soma + (r.total ?? 0), 0);
+  const media = Math.round((acertos / total) * 100);
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-2xl border border-borda bg-superficie p-5">
+        <p className="text-xs uppercase tracking-[0.15em] text-suave">
+          {atividade?.titulo ?? "Último quiz"}
+        </p>
+        <p className="mt-2 font-mono text-4xl font-bold text-foco">{media}%</p>
+        <p className="mt-1 text-xs text-suave">
+          média da turma · {comNota.length} de {alunos.length} responderam
+        </p>
+        <div className="mt-4 flex h-3 overflow-hidden rounded-full bg-superficie-alta">
+          <div className="bg-foco" style={{ width: `${media}%` }} />
+          <div className="bg-alerta/70" style={{ width: `${100 - media}%` }} />
+        </div>
+      </div>
+
+      <ul className="space-y-2">
+        {comNota
+          .slice()
+          .sort((a, b) => (a.acertos ?? 0) / (a.total ?? 1) - (b.acertos ?? 0) / (b.total ?? 1))
+          .map((r) => {
+            const parte = Math.round(((r.acertos ?? 0) / (r.total ?? 1)) * 100);
+            return (
+              <li key={r.id} className="flex items-center gap-3 text-sm">
+                <span className="w-32 shrink-0 truncate text-suave">{r.nome}</span>
+                <span className="h-2 flex-1 overflow-hidden rounded-full bg-superficie-alta">
+                  <span
+                    className={`block h-full rounded-full ${parte < 50 ? "bg-alerta" : "bg-foco"}`}
+                    style={{ width: `${parte}%` }}
+                  />
+                </span>
+                <span className="w-16 shrink-0 text-right font-mono text-xs text-suave">
+                  {r.acertos}/{r.total}
+                </span>
+              </li>
+            );
+          })}
+      </ul>
+    </div>
   );
 }
 

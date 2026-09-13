@@ -24,8 +24,8 @@ import {
   ENFEITES,
   ESTADOS,
   RECOMPENSAS_INICIAIS,
-  XP_POR_ENTREGA,
   calcularCiclo,
+  xpDaEntrega,
   chaveDeMateria,
   contarPalavras,
   formatarTempo,
@@ -273,15 +273,31 @@ export default function TelaDoAluno() {
     }).catch((e) => console.error("entrega pendente de sincronização", e));
 
     // Conta o percurso do aluno: entregas liberam enfeite, XP compra recompensa.
+    const ganho = xpDaEntrega(dados.acertos, dados.total);
+    const entregasAgora = (eu.entregas ?? 0) + 1;
+
+    // Medalhas que o app dá sozinho, por fato registrado.
+    const automaticas: string[] = [];
+    if (entregasAgora >= 5) automaticas.push("assiduo");
+    if (dados.total && (dados.acertos ?? 0) / dados.total >= 0.8) automaticas.push("desempenho");
+
+    const novas = automaticas.filter((id) => !eu.medalhas?.includes(id));
+
     updateDoc(doc(db, "turmas", turmaId, "pessoas", pessoaId), {
       entregas: increment(1),
-      xp: increment(XP_POR_ENTREGA),
+      xp: increment(ganho),
       [`porMateria.${chaveDeMateria(sessao.materia ?? "")}`]: increment(1),
+      ...(novas.length ? { medalhas: arrayUnion(...novas) } : {}),
     })
       .then(() =>
         setEu((p) =>
           p
-            ? { ...p, entregas: (p.entregas ?? 0) + 1, xp: (p.xp ?? 0) + XP_POR_ENTREGA }
+            ? {
+                ...p,
+                entregas: entregasAgora,
+                xp: (p.xp ?? 0) + ganho,
+                medalhas: [...(p.medalhas ?? []), ...novas],
+              }
             : p,
         ),
       )
