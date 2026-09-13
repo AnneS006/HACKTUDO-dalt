@@ -17,8 +17,8 @@ const db = getFirestore(app);
 const CORES = ["#5fd3a0", "#f0b05d", "#f2766b", "#9d8cf5", "#5db8f0", "#f08fb8"];
 
 const escolas = [
-  { id: "emef-monteiro-lobato", nome: "EMEF Monteiro Lobato", cidade: "Gravataí, RS" },
-  { id: "ee-castro-alves", nome: "EE Castro Alves", cidade: "Porto Alegre, RS" },
+  { id: "emef-monteiro-lobato", nome: "EMEF Monteiro Lobato", cidade: "Gravataí, RS", codigo: "ESC-8842" },
+  { id: "ee-castro-alves", nome: "EE Castro Alves", cidade: "Porto Alegre, RS", codigo: "ESC-3310" },
 ];
 
 const turmas = [
@@ -106,7 +106,10 @@ let totalPessoas = 0;
 
 for (const turma of turmas) {
   const { id, professores, alunos, ...dados } = turma;
-  lote.set(doc(db, "turmas", id), dados);
+  lote.set(doc(db, "turmas", id), {
+    ...dados,
+    professorIds: professores.map((p) => identificador(p.nome)),
+  });
 
   lote.set(doc(db, "turmas", id, "sessao", "atual"), {
     atividade: null,

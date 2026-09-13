@@ -4,6 +4,8 @@ export interface Escola {
   id: string;
   nome: string;
   cidade: string;
+  // Código institucional que a escola entrega a quem dá aula.
+  codigo: string;
 }
 
 export interface Turma {
@@ -11,6 +13,9 @@ export interface Turma {
   escolaId: string;
   nome: string;
   codigo: string;
+  // Quem pode abrir esta turma. Guardado aqui para listar as turmas de alguém
+  // sem varrer as pessoas de todas as turmas da escola.
+  professorIds?: string[];
   recompensas?: Recompensa[];
   periodoMin: number;
   focoMin: number;
@@ -41,6 +46,28 @@ export interface Pessoa {
 /** Firestore trata ponto como separador de caminho dentro do documento. */
 export function chaveDeMateria(materia: string): string {
   return materia.trim().replace(/[.~*/[\]]/g, "").slice(0, 40) || "Geral";
+}
+
+/** Identificador estável a partir do nome, sem acento e sem espaço. */
+export function identificador(nome: string): string {
+  return nome
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 60);
+}
+
+/** Código de turma curto, sem caracteres que se confundem ao ditar em sala. */
+export function codigoDeTurma(nome: string): string {
+  const letras = identificador(nome).replace(/-/g, "").toUpperCase().slice(0, 3) || "TUR";
+  return `${letras}${Math.floor(10 + Math.random() * 89)}`;
+}
+
+/** PIN de quatro dígitos distinto por posição na lista da turma. */
+export function pinDaPosicao(posicao: number): string {
+  return String(posicao + 1).padStart(2, "0").repeat(2);
 }
 
 export const XP_POR_ENTREGA = 50;
