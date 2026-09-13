@@ -10,7 +10,7 @@ const config: CapacitorConfig = {
   // do APK, e é de lá que o APK é distribuído.
   webDir: "capacitor-web",
   server: {
-    url: "https://modo-aula-five.vercel.app",
+    url: "https://modo-aula-dalt.vercel.app",
     cleartext: false,
   },
   android: {
