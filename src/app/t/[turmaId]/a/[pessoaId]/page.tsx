@@ -239,6 +239,13 @@ export default function TelaDoAluno() {
     });
   }
 
+  // Sair tem que sair de verdade: sem limpar a turma guardada no aparelho, a
+  // tela inicial reconhecia o aluno e o devolvia direto para o PIN.
+  function sairDaSessao() {
+    localStorage.removeItem("modo-aula:turma");
+    router.push("/");
+  }
+
   async function equiparEnfeite(enfeite: string) {
     const novo = eu?.enfeite === enfeite ? "" : enfeite;
     setEu((p) => (p ? { ...p, enfeite: novo } : p));
@@ -341,7 +348,7 @@ export default function TelaDoAluno() {
         recompensas={recompensas}
         aoEquipar={equiparEnfeite}
         aoResgatar={resgatar}
-        aoSair={() => router.push("/")}
+        aoSair={sairDaSessao}
       />
     );
   }
@@ -391,6 +398,15 @@ export default function TelaDoAluno() {
         <p className="mt-6 text-xs leading-relaxed text-suave/60">
           Para travar de vez no aparelho: {instrucaoDeTravar()}
         </p>
+
+        {/* Antes de entrar no foco ainda dá para sair. Depois de entrar, não:
+            seria uma porta de fuga dentro do próprio modo foco. */}
+        <button
+          onClick={sairDaSessao}
+          className="mt-8 text-sm text-suave underline-offset-4 hover:underline"
+        >
+          Não é você? Sair
+        </button>
       </Centro>
     );
   }
