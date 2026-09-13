@@ -19,10 +19,12 @@ import { GavetaFerramentas } from "@/components/ferramentas";
 import { VistaColetiva } from "@/components/coletivo";
 import {
   CONVITES_DE_PAUSA,
+  ENFEITES,
   ESTADOS,
   calcularCiclo,
   contarPalavras,
   formatarTempo,
+  medalhaPor,
   type Atividade,
   type Estado,
   type Pessoa,
@@ -197,6 +199,12 @@ export default function TelaDoAluno() {
     };
   }, [soltarFoco]);
 
+  async function equiparEnfeite(enfeite: string) {
+    const novo = eu?.enfeite === enfeite ? "" : enfeite;
+    setEu((p) => (p ? { ...p, enfeite: novo } : p));
+    await updateDoc(doc(db, "turmas", turmaId, "pessoas", pessoaId), { enfeite: novo });
+  }
+
   async function registrarCheckin(estado: Estado | null) {
     setCheckinFeito(true);
     if (chaveCheckin) localStorage.setItem(chaveCheckin, "1");
@@ -223,6 +231,11 @@ export default function TelaDoAluno() {
       ...dados,
       criadaEm: serverTimestamp(),
     }).catch((e) => console.error("entrega pendente de sincronização", e));
+
+    // Conta o percurso do aluno, que é o que libera os enfeites do avatar.
+    updateDoc(doc(db, "turmas", turmaId, "pessoas", pessoaId), { entregas: increment(1) })
+      .then(() => setEu((p) => (p ? { ...p, entregas: (p.entregas ?? 0) + 1 } : p)))
+      .catch((e) => console.error("contagem de entrega pendente", e));
 
     if (dados.texto || dados.respostas?.length) {
       try {
@@ -264,6 +277,8 @@ export default function TelaDoAluno() {
             ? "Quem está dando a aula te liberou desta atividade. Pode guardar o celular."
             : `${turma.nome} · a aula começa quando a turma estiver pronta.`}
         </p>
+        <Conquistas pessoa={eu} aoEquipar={equiparEnfeite} />
+
         {/* Só aqui: trocar de perfil no meio do foco esvaziaria o sentido dele. */}
         <button
           onClick={() => router.push("/")}
@@ -721,6 +736,75 @@ function Coletiva({ ocupado, aoEnviar }: { ocupado: boolean; aoEnviar: AoEnviar 
       >
         {ocupado ? "Enviando..." : "Somar à turma"}
       </button>
+    </div>
+  );
+}
+
+// O que o aluno conquistou é só dele: ele vê o próprio percurso, nunca a
+// posição em relação aos colegas.
+function Conquistas({
+  pessoa,
+  aoEquipar,
+}: {
+  pessoa: Pessoa;
+  aoEquipar: (enfeite: string) => void;
+}) {
+  const entregas = pessoa.entregas ?? 0;
+  const medalhas = (pessoa.medalhas ?? []).map(medalhaPor).filter(Boolean);
+
+  if (medalhas.length === 0 && entregas === 0) return null;
+
+  return (
+    <div className="surgir mt-10 w-full rounded-3xl border border-borda bg-superficie p-5 text-left">
+      {medalhas.length > 0 && (
+        <>
+          <p className="text-xs uppercase tracking-[0.15em] text-suave">
+            Reconhecimentos que você recebeu
+          </p>
+          <ul className="mt-3 space-y-2">
+            {medalhas.map((medalha) => (
+              <li key={medalha!.id} className="flex items-center gap-3">
+                <span className="text-xl" aria-hidden="true">
+                  {medalha!.enfeite}
+                </span>
+                <span>
+                  <span className="block text-sm font-medium">{medalha!.nome}</span>
+                  <span className="block text-xs text-suave">{medalha!.descricao}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      <p className={`text-xs uppercase tracking-[0.15em] text-suave ${medalhas.length ? "mt-6" : ""}`}>
+        Seu avatar · {entregas} {entregas === 1 ? "entrega" : "entregas"}
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {ENFEITES.map((item) => {
+          const liberado = entregas >= item.exige;
+          const usando = pessoa.enfeite === item.enfeite;
+          return (
+            <button
+              key={item.enfeite}
+              onClick={() => liberado && aoEquipar(item.enfeite)}
+              disabled={!liberado}
+              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${
+                usando
+                  ? "border-foco bg-foco/10 text-foco"
+                  : liberado
+                    ? "border-borda hover:border-foco"
+                    : "border-borda text-suave/50"
+              }`}
+            >
+              <span className="text-base" aria-hidden="true">
+                {item.enfeite}
+              </span>
+              {liberado ? item.nome : `faltam ${item.exige - entregas}`}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

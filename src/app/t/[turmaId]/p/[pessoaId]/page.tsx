@@ -18,8 +18,10 @@ import { Avatar } from "@/components/avatar";
 import { VistaColetiva } from "@/components/coletivo";
 import {
   ESTADOS,
+  MEDALHAS,
   calcularCiclo,
   formatarTempo,
+  medalhaPor,
   type Atividade,
   type Checkins,
   type Pessoa,
@@ -56,6 +58,7 @@ export default function PainelProfessor() {
   const [pedido, setPedido] = useState("");
   const [rascunho, setRascunho] = useState<Atividade | null>(null);
   const [salvas, setSalvas] = useState<Atividade[]>([]);
+  const [alunoParaMedalha, setAlunoParaMedalha] = useState<Pessoa | null>(null);
   const [editandoMateria, setEditandoMateria] = useState(false);
   const [materia, setMateria] = useState("");
   const [sintese, setSintese] = useState("");
@@ -159,6 +162,22 @@ export default function PainelProfessor() {
       await encerrarFoco();
     }
     router.push("/");
+  }
+
+  // Reconhecimento vai direto no perfil do aluno, sem passar por pontuação:
+  // é a professora dizendo o que viu, não o sistema medindo.
+  async function darMedalha(aluno: Pessoa, medalhaId: string) {
+    setAlunoParaMedalha(null);
+    setPessoas((lista) =>
+      lista.map((p) =>
+        p.id === aluno.id
+          ? { ...p, medalhas: [...new Set([...(p.medalhas ?? []), medalhaId])] }
+          : p,
+      ),
+    );
+    await updateDoc(doc(db, "turmas", turmaId, "pessoas", aluno.id), {
+      medalhas: arrayUnion(medalhaId),
+    });
   }
 
   async function salvarMateria() {
@@ -327,12 +346,26 @@ export default function PainelProfessor() {
               >
                 <Avatar pessoa={a} tamanho="p" apagado={!emFoco} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm">{a.nome}</p>
+                  <p className="truncate text-sm">
+                    {a.nome}
+                    {(a.medalhas?.length ?? 0) > 0 && (
+                      <span className="ml-2" title={`${a.medalhas!.length} reconhecimentos`}>
+                        {a.medalhas!.map((id) => medalhaPor(id)?.enfeite).join("")}
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs text-suave">
                     {!sessao.focoAtivo ? "livre" : liberado ? "fora do foco" : "em foco"}
                     {responderam.has(a.id) && " · entregou"}
                   </p>
                 </div>
+                <button
+                  onClick={() => setAlunoParaMedalha(a)}
+                  className="rounded-lg border border-borda px-2.5 py-1.5 text-xs text-suave transition hover:border-foco hover:text-texto"
+                  title="Reconhecer"
+                >
+                  ★
+                </button>
                 {sessao.focoAtivo && (
                   <button
                     onClick={() => alternarLiberado(a.id)}
@@ -346,6 +379,50 @@ export default function PainelProfessor() {
           })}
         </ul>
       </section>
+
+      {alunoParaMedalha && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-fundo/80 p-4 sm:items-center"
+          onClick={() => setAlunoParaMedalha(null)}
+        >
+          <div
+            className="surgir w-full max-w-md rounded-3xl border border-borda bg-superficie p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-xs uppercase tracking-[0.15em] text-suave">Reconhecer</p>
+            <h3 className="mt-1 text-xl font-bold">{alunoParaMedalha.nome}</h3>
+
+            <ul className="mt-5 space-y-2">
+              {MEDALHAS.map((medalha) => {
+                const jaTem = alunoParaMedalha.medalhas?.includes(medalha.id);
+                return (
+                  <li key={medalha.id}>
+                    <button
+                      onClick={() => darMedalha(alunoParaMedalha, medalha.id)}
+                      disabled={jaTem}
+                      className="flex w-full items-center gap-4 rounded-2xl border border-borda bg-fundo p-4 text-left transition enabled:hover:border-foco disabled:opacity-40"
+                    >
+                      <span className="text-2xl" aria-hidden="true">
+                        {medalha.enfeite}
+                      </span>
+                      <span className="flex-1">
+                        <span className="block text-sm font-medium">{medalha.nome}</span>
+                        <span className="block text-xs text-suave">{medalha.descricao}</span>
+                      </span>
+                      {jaTem && <span className="text-xs text-foco">já tem</span>}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <p className="mt-5 text-xs leading-relaxed text-suave">
+              O aluno vê o que recebeu. A turma não vê a lista dos outros, e não existe
+              classificação entre eles.
+            </p>
+          </div>
+        </div>
+      )}
 
       <section className="mt-10">
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.15em] text-suave">

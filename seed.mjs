@@ -124,9 +124,26 @@ for (const turma of turmas) {
     ...alunos.map((nome) => ({ nome, papel: "aluno" })),
   ];
 
+  // Alguns alunos já chegam com percurso, senão medalhas e enfeites de avatar
+  // ficam invisíveis em uma demonstração curta. Varia de propósito: tem quem
+  // ainda não entregou nada, e isso também precisa aparecer bem na tela.
+  const percursos = [
+    { entregas: 7, medalhas: ["proativo", "cuidado"] },
+    { entregas: 4, medalhas: ["evolucao"] },
+    { entregas: 2, medalhas: [] },
+    { entregas: 6, medalhas: ["perguntas"] },
+    { entregas: 0, medalhas: [] },
+    { entregas: 3, medalhas: ["cuidado"] },
+  ];
+
+  let alunoIndice = 0;
+
   gente.forEach((pessoa, indice) => {
+    const percurso = pessoa.papel === "aluno" ? percursos[alunoIndice++ % percursos.length] : {};
+
     lote.set(doc(db, "turmas", id, "pessoas", identificador(pessoa.nome)), {
       ...pessoa,
+      ...percurso,
       cor: CORES[indice % CORES.length],
     });
     totalPessoas += 1;
