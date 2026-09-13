@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
+  arrayUnion,
   collection,
   doc,
   getDoc,
+  getDocs,
   increment,
   onSnapshot,
   serverTimestamp,
@@ -21,10 +23,14 @@ import {
   CONVITES_DE_PAUSA,
   ENFEITES,
   ESTADOS,
+  RECOMPENSAS_INICIAIS,
+  XP_POR_ENTREGA,
   calcularCiclo,
+  chaveDeMateria,
   contarPalavras,
   formatarTempo,
   medalhaPor,
+  type Recompensa,
   type Atividade,
   type Estado,
   type Pessoa,
@@ -50,6 +56,8 @@ export default function TelaDoAluno() {
   const [foraDoFoco, setForaDoFoco] = useState(false);
   const trava = useRef<WakeLockSentinel | null>(null);
   const [respostas, setRespostas] = useState<Resposta[]>([]);
+  const [colegas, setColegas] = useState<Pessoa[]>([]);
+  const [recompensas, setRecompensas] = useState<Recompensa[]>([]);
   const [entregue, setEntregue] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [ocupado, setOcupado] = useState(false);
@@ -64,11 +72,27 @@ export default function TelaDoAluno() {
     : null;
 
   useEffect(() => {
-    getDoc(doc(db, "turmas", turmaId)).then((s) => setTurma({ id: s.id, ...s.data() } as Turma));
+    getDoc(doc(db, "turmas", turmaId)).then((s) => {
+      setTurma({ id: s.id, ...s.data() } as Turma);
+      setRecompensas((s.data()?.recompensas as Recompensa[]) ?? RECOMPENSAS_INICIAIS);
+    });
     getDoc(doc(db, "turmas", turmaId, "pessoas", pessoaId)).then((s) =>
       setEu({ id: s.id, ...s.data() } as Pessoa),
     );
   }, [turmaId, pessoaId]);
+
+  // Só carrega a turma inteira quando o aluno está parado, esperando a aula:
+  // durante o foco isso não tem uso e só gastaria dados dele.
+  const paradoEsperando = !sessao?.focoAtivo || Boolean(sessao?.liberados.includes(pessoaId));
+
+  useEffect(() => {
+    if (!paradoEsperando) return;
+    getDocs(collection(db, "turmas", turmaId, "pessoas")).then((s) =>
+      setColegas(
+        s.docs.map((d) => ({ id: d.id, ...d.data() }) as Pessoa).filter((p) => p.papel === "aluno"),
+      ),
+    );
+  }, [turmaId, paradoEsperando]);
 
   useEffect(() => {
     return onSnapshot(sessaoRef, (s) => {
@@ -82,6 +106,7 @@ export default function TelaDoAluno() {
         pausaMin: d.pausaMin ?? 3,
         liberados: (d.liberados as string[]) ?? [],
         publicadaEm: d.publicadaEm?.toDate?.() ?? null,
+        materia: (d.materia as string) ?? "",
       };
       setSessao((antiga) => {
         if (antiga?.focoAtivo && !nova.focoAtivo) {
@@ -199,6 +224,20 @@ export default function TelaDoAluno() {
     };
   }, [soltarFoco]);
 
+  async function resgatar(recompensa: Recompensa) {
+    if (!eu || (eu.xp ?? 0) < recompensa.custo) return;
+
+    setEu((p) =>
+      p
+        ? { ...p, xp: (p.xp ?? 0) - recompensa.custo, resgates: [...(p.resgates ?? []), recompensa.titulo] }
+        : p,
+    );
+    await updateDoc(doc(db, "turmas", turmaId, "pessoas", pessoaId), {
+      xp: increment(-recompensa.custo),
+      resgates: arrayUnion(recompensa.titulo),
+    });
+  }
+
   async function equiparEnfeite(enfeite: string) {
     const novo = eu?.enfeite === enfeite ? "" : enfeite;
     setEu((p) => (p ? { ...p, enfeite: novo } : p));
@@ -228,13 +267,24 @@ export default function TelaDoAluno() {
       pessoaId,
       nome: eu.nome,
       tipo: sessao.atividade.tipo,
+      ...(sessao.materia ? { materia: sessao.materia } : {}),
       ...dados,
       criadaEm: serverTimestamp(),
     }).catch((e) => console.error("entrega pendente de sincronização", e));
 
-    // Conta o percurso do aluno, que é o que libera os enfeites do avatar.
-    updateDoc(doc(db, "turmas", turmaId, "pessoas", pessoaId), { entregas: increment(1) })
-      .then(() => setEu((p) => (p ? { ...p, entregas: (p.entregas ?? 0) + 1 } : p)))
+    // Conta o percurso do aluno: entregas liberam enfeite, XP compra recompensa.
+    updateDoc(doc(db, "turmas", turmaId, "pessoas", pessoaId), {
+      entregas: increment(1),
+      xp: increment(XP_POR_ENTREGA),
+      [`porMateria.${chaveDeMateria(sessao.materia ?? "")}`]: increment(1),
+    })
+      .then(() =>
+        setEu((p) =>
+          p
+            ? { ...p, entregas: (p.entregas ?? 0) + 1, xp: (p.xp ?? 0) + XP_POR_ENTREGA }
+            : p,
+        ),
+      )
       .catch((e) => console.error("contagem de entrega pendente", e));
 
     if (dados.texto || dados.respostas?.length) {
@@ -277,7 +327,13 @@ export default function TelaDoAluno() {
             ? "Quem está dando a aula te liberou desta atividade. Pode guardar o celular."
             : `${turma.nome} · a aula começa quando a turma estiver pronta.`}
         </p>
-        <Conquistas pessoa={eu} aoEquipar={equiparEnfeite} />
+        <PainelDoAluno
+          eu={eu}
+          colegas={colegas}
+          recompensas={recompensas}
+          aoEquipar={equiparEnfeite}
+          aoResgatar={resgatar}
+        />
 
         {/* Só aqui: trocar de perfil no meio do foco esvaziaria o sentido dele. */}
         <button
@@ -740,70 +796,179 @@ function Coletiva({ ocupado, aoEnviar }: { ocupado: boolean; aoEnviar: AoEnviar 
   );
 }
 
-// O que o aluno conquistou é só dele: ele vê o próprio percurso, nunca a
-// posição em relação aos colegas.
-function Conquistas({
-  pessoa,
-  aoEquipar,
-}: {
-  pessoa: Pessoa;
-  aoEquipar: (enfeite: string) => void;
-}) {
-  const entregas = pessoa.entregas ?? 0;
-  const medalhas = (pessoa.medalhas ?? []).map(medalhaPor).filter(Boolean);
+const ABAS = [
+  { chave: "voce", rotulo: "Você" },
+  { chave: "lojinha", rotulo: "Lojinha" },
+  { chave: "turma", rotulo: "Turma" },
+  { chave: "entregas", rotulo: "Entregas" },
+] as const;
 
-  if (medalhas.length === 0 && entregas === 0) return null;
+function PainelDoAluno({
+  eu,
+  colegas,
+  recompensas,
+  aoEquipar,
+  aoResgatar,
+}: {
+  eu: Pessoa;
+  colegas: Pessoa[];
+  recompensas: Recompensa[];
+  aoEquipar: (enfeite: string) => void;
+  aoResgatar: (r: Recompensa) => void;
+}) {
+  const [aba, setAba] = useState<(typeof ABAS)[number]["chave"]>("voce");
+
+  const entregas = eu.entregas ?? 0;
+  const xp = eu.xp ?? 0;
+  const medalhas = (eu.medalhas ?? []).map(medalhaPor).filter(Boolean);
+  const porMateria = Object.entries(eu.porMateria ?? {}).sort((a, b) => b[1] - a[1]);
+  const ranking = [...colegas].sort((a, b) => (b.xp ?? 0) - (a.xp ?? 0));
 
   return (
     <div className="surgir mt-10 w-full rounded-3xl border border-borda bg-superficie p-5 text-left">
-      {medalhas.length > 0 && (
-        <>
-          <p className="text-xs uppercase tracking-[0.15em] text-suave">
-            Reconhecimentos que você recebeu
-          </p>
-          <ul className="mt-3 space-y-2">
-            {medalhas.map((medalha) => (
-              <li key={medalha!.id} className="flex items-center gap-3">
-                <span className="text-xl" aria-hidden="true">
-                  {medalha!.enfeite}
-                </span>
-                <span>
-                  <span className="block text-sm font-medium">{medalha!.nome}</span>
-                  <span className="block text-xs text-suave">{medalha!.descricao}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-
-      <p className={`text-xs uppercase tracking-[0.15em] text-suave ${medalhas.length ? "mt-6" : ""}`}>
-        Seu avatar · {entregas} {entregas === 1 ? "entrega" : "entregas"}
-      </p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {ENFEITES.map((item) => {
-          const liberado = entregas >= item.exige;
-          const usando = pessoa.enfeite === item.enfeite;
-          return (
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-1.5">
+          {ABAS.map((item) => (
             <button
-              key={item.enfeite}
-              onClick={() => liberado && aoEquipar(item.enfeite)}
-              disabled={!liberado}
-              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${
-                usando
-                  ? "border-foco bg-foco/10 text-foco"
-                  : liberado
-                    ? "border-borda hover:border-foco"
-                    : "border-borda text-suave/50"
+              key={item.chave}
+              onClick={() => setAba(item.chave)}
+              className={`rounded-xl px-3 py-1.5 text-xs transition ${
+                aba === item.chave ? "bg-foco font-medium text-fundo" : "text-suave hover:text-texto"
               }`}
             >
-              <span className="text-base" aria-hidden="true">
-                {item.enfeite}
-              </span>
-              {liberado ? item.nome : `faltam ${item.exige - entregas}`}
+              {item.rotulo}
             </button>
-          );
-        })}
+          ))}
+        </div>
+        <span className="shrink-0 font-mono text-sm text-foco">{xp} XP</span>
+      </div>
+
+      <div className="mt-5">
+        {aba === "voce" && (
+          <>
+            {medalhas.length > 0 ? (
+              <ul className="space-y-2">
+                {medalhas.map((medalha) => (
+                  <li key={medalha!.id} className="flex items-center gap-3">
+                    <span className="text-xl" aria-hidden="true">
+                      {medalha!.enfeite}
+                    </span>
+                    <span>
+                      <span className="block text-sm font-medium">{medalha!.nome}</span>
+                      <span className="block text-xs text-suave">{medalha!.descricao}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-suave">
+                Ainda sem reconhecimentos. Eles vêm de quem dá a aula, pelo que ela vê em sala.
+              </p>
+            )}
+
+            <p className="mt-6 text-xs uppercase tracking-[0.15em] text-suave">
+              Avatar · {entregas} {entregas === 1 ? "entrega" : "entregas"}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {ENFEITES.map((item) => {
+                const liberado = entregas >= item.exige;
+                const usando = eu.enfeite === item.enfeite;
+                return (
+                  <button
+                    key={item.enfeite}
+                    onClick={() => liberado && aoEquipar(item.enfeite)}
+                    disabled={!liberado}
+                    className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${
+                      usando
+                        ? "border-foco bg-foco/10 text-foco"
+                        : liberado
+                          ? "border-borda hover:border-foco"
+                          : "border-borda text-suave/50"
+                    }`}
+                  >
+                    <span className="text-base" aria-hidden="true">
+                      {item.enfeite}
+                    </span>
+                    {liberado ? item.nome : `faltam ${item.exige - entregas}`}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {aba === "lojinha" && (
+          <ul className="space-y-2">
+            {recompensas.map((r) => {
+              const podePagar = xp >= r.custo;
+              return (
+                <li key={r.id} className="flex items-center gap-3 rounded-2xl border border-borda p-3">
+                  <span className="text-2xl" aria-hidden="true">
+                    {r.enfeite}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm">{r.titulo}</span>
+                    <span className="font-mono text-xs text-suave">{r.custo} XP</span>
+                  </span>
+                  <button
+                    onClick={() => aoResgatar(r)}
+                    disabled={!podePagar}
+                    className="shrink-0 rounded-xl bg-foco px-4 py-2 text-xs font-semibold text-fundo disabled:opacity-30"
+                  >
+                    {podePagar ? "Resgatar" : `faltam ${r.custo - xp}`}
+                  </button>
+                </li>
+              );
+            })}
+            {(eu.resgates?.length ?? 0) > 0 && (
+              <li className="pt-2 text-xs text-suave">
+                Já resgatou: {eu.resgates!.join(", ")}. Combine com quem dá a aula quando usar.
+              </li>
+            )}
+          </ul>
+        )}
+
+        {aba === "turma" && (
+          <ol className="space-y-1.5">
+            {ranking.map((colega, posicao) => (
+              <li
+                key={colega.id}
+                className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm ${
+                  colega.id === eu.id ? "bg-foco/10 text-foco" : "text-suave"
+                }`}
+              >
+                <span className="w-5 shrink-0 text-center font-mono text-xs">{posicao + 1}</span>
+                <span className="min-w-0 flex-1 truncate">
+                  {colega.nome}
+                  {colega.id === eu.id && " · você"}
+                </span>
+                <span className="shrink-0 font-mono text-xs">{colega.xp ?? 0}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+
+        {aba === "entregas" &&
+          (porMateria.length > 0 ? (
+            <ul className="space-y-4">
+              {porMateria.map(([materia, quantas]) => (
+                <li key={materia}>
+                  <div className="flex items-baseline justify-between text-sm">
+                    <span>{materia}</span>
+                    <span className="font-mono text-xs text-suave">{quantas}</span>
+                  </div>
+                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-superficie-alta">
+                    <div
+                      className="h-full rounded-full bg-foco"
+                      style={{ width: `${(quantas / Math.max(...porMateria.map((m) => m[1]))) * 100}%` }}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-suave">Suas entregas aparecem aqui, separadas por matéria.</p>
+          ))}
       </div>
     </div>
   );

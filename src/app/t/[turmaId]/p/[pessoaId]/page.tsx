@@ -19,9 +19,12 @@ import { VistaColetiva } from "@/components/coletivo";
 import {
   ESTADOS,
   MEDALHAS,
+  RECOMPENSAS_INICIAIS,
+  XP_POR_ENTREGA,
   calcularCiclo,
   formatarTempo,
   medalhaPor,
+  type Recompensa,
   type Atividade,
   type Checkins,
   type Pessoa,
@@ -59,6 +62,8 @@ export default function PainelProfessor() {
   const [rascunho, setRascunho] = useState<Atividade | null>(null);
   const [salvas, setSalvas] = useState<Atividade[]>([]);
   const [alunoParaMedalha, setAlunoParaMedalha] = useState<Pessoa | null>(null);
+  const [recompensas, setRecompensas] = useState<Recompensa[]>([]);
+  const [novaRecompensa, setNovaRecompensa] = useState({ titulo: "", custo: "200", enfeite: "🎁" });
   const [editandoMateria, setEditandoMateria] = useState(false);
   const [materia, setMateria] = useState("");
   const [sintese, setSintese] = useState("");
@@ -71,6 +76,7 @@ export default function PainelProfessor() {
     getDoc(doc(db, "turmas", turmaId)).then((s) => {
       setTurma({ id: s.id, ...s.data() } as Turma);
       setSalvas(((s.data()?.salvas as Atividade[]) ?? []).slice().reverse());
+      setRecompensas((s.data()?.recompensas as Recompensa[]) ?? RECOMPENSAS_INICIAIS);
     });
     getDoc(doc(db, "turmas", turmaId, "pessoas", pessoaId)).then((s) => {
       const pessoa = { id: s.id, ...s.data() } as Pessoa;
@@ -94,6 +100,7 @@ export default function PainelProfessor() {
         pausaMin: d.pausaMin ?? 3,
         liberados: (d.liberados as string[]) ?? [],
         publicadaEm: d.publicadaEm?.toDate?.() ?? null,
+        materia: (d.materia as string) ?? "",
       });
       setCheckins((d.checkins as Checkins) ?? {});
     });
@@ -180,6 +187,30 @@ export default function PainelProfessor() {
     });
   }
 
+  async function publicarRecompensa(evento: React.FormEvent) {
+    evento.preventDefault();
+    const titulo = novaRecompensa.titulo.trim();
+    if (!titulo) return;
+
+    const item: Recompensa = {
+      id: `r${Date.now()}`,
+      titulo,
+      custo: Math.max(0, Number(novaRecompensa.custo) || 0),
+      enfeite: novaRecompensa.enfeite.trim() || "🎁",
+    };
+
+    const lista = [...recompensas, item];
+    setRecompensas(lista);
+    setNovaRecompensa({ titulo: "", custo: "200", enfeite: "🎁" });
+    await updateDoc(doc(db, "turmas", turmaId), { recompensas: lista });
+  }
+
+  async function removerRecompensa(id: string) {
+    const lista = recompensas.filter((r) => r.id !== id);
+    setRecompensas(lista);
+    await updateDoc(doc(db, "turmas", turmaId), { recompensas: lista });
+  }
+
   async function salvarMateria() {
     const limpa = materia.trim();
     setEditandoMateria(false);
@@ -218,7 +249,11 @@ export default function PainelProfessor() {
   async function publicar(atividade: Atividade) {
     const antigas = await getDocs(collection(sessaoRef, "respostas"));
     await Promise.all(antigas.docs.map((d) => deleteDoc(d.ref)));
-    await updateDoc(sessaoRef, { atividade, publicadaEm: serverTimestamp() });
+    await updateDoc(sessaoRef, {
+      atividade,
+      publicadaEm: serverTimestamp(),
+      materia: eu?.materia ?? "",
+    });
 
     // Guardar na própria turma deixa a atividade pronta para reenviar depois
     // sem depender da IA responder de novo.
@@ -641,6 +676,77 @@ export default function PainelProfessor() {
           </ul>
         </section>
       )}
+
+      <section className="mt-10">
+        <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.15em] text-suave">
+          Lojinha da turma
+        </h2>
+        <p className="mb-5 text-sm text-suave">
+          O aluno ganha {XP_POR_ENTREGA} XP por entrega e troca aqui. Quem cumpre a recompensa em
+          sala é você — o app só registra o pedido.
+        </p>
+
+        <form onSubmit={publicarRecompensa} className="flex flex-wrap items-end gap-3">
+          <label className="flex-1 text-xs text-suave">
+            Recompensa
+            <input
+              value={novaRecompensa.titulo}
+              onChange={(e) => setNovaRecompensa((n) => ({ ...n, titulo: e.target.value }))}
+              placeholder="15 minutos livres"
+              className="mt-1 w-full rounded-xl border border-borda bg-superficie px-3 py-2 text-base text-texto outline-none focus:border-foco"
+            />
+          </label>
+          <label className="w-24 text-xs text-suave">
+            Custo
+            <input
+              type="number"
+              min={0}
+              value={novaRecompensa.custo}
+              onChange={(e) => setNovaRecompensa((n) => ({ ...n, custo: e.target.value }))}
+              className="mt-1 w-full rounded-xl border border-borda bg-superficie px-3 py-2 text-base text-texto outline-none focus:border-foco"
+            />
+          </label>
+          <label className="w-20 text-xs text-suave">
+            Ícone
+            <input
+              value={novaRecompensa.enfeite}
+              onChange={(e) => setNovaRecompensa((n) => ({ ...n, enfeite: e.target.value }))}
+              maxLength={2}
+              className="mt-1 w-full rounded-xl border border-borda bg-superficie px-3 py-2 text-center text-base text-texto outline-none focus:border-foco"
+            />
+          </label>
+          <button
+            type="submit"
+            className="rounded-xl bg-foco px-5 py-2.5 text-sm font-semibold text-fundo"
+          >
+            Publicar
+          </button>
+        </form>
+
+        <ul className="mt-5 grid gap-2 sm:grid-cols-2">
+          {recompensas.map((r) => (
+            <li
+              key={r.id}
+              className="flex items-center gap-3 rounded-2xl border border-borda bg-superficie p-3"
+            >
+              <span className="text-2xl" aria-hidden="true">
+                {r.enfeite}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm">{r.titulo}</span>
+                <span className="font-mono text-xs text-foco">{r.custo} XP</span>
+              </span>
+              <button
+                onClick={() => removerRecompensa(r.id)}
+                className="rounded-lg border border-borda px-2.5 py-1.5 text-xs text-suave transition hover:border-alerta hover:text-alerta"
+                title="Tirar da lojinha"
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
 
       <section className="mt-10">
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.15em] text-suave">
