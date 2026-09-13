@@ -4,12 +4,15 @@ const TAMANHOS = {
   p: "h-10 w-10 text-xs",
   m: "h-14 w-14 text-sm",
   g: "h-20 w-20 text-lg",
+  // Só a vitrine do avatar, na aba de personalizar.
+  gg: "h-32 w-32 text-3xl",
 };
 
 const ENFEITE = {
   p: "-top-1 -right-1 text-sm",
   m: "-top-1.5 -right-1.5 text-lg",
   g: "-top-2 -right-2 text-2xl",
+  gg: "-top-1 -right-1 text-4xl",
 };
 
 export function Avatar({

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import {
   collection,
@@ -47,10 +47,13 @@ export default function Entrada() {
 
   const [etapa, setEtapa] = useState<Etapa>("escolha");
   // Quem já está dentro do aplicativo não precisa ver o convite para instalar
-  // o aplicativo. A checagem só existe no navegador, então entra por efeito:
-  // assim o HTML do servidor e o da tela não divergem.
-  const [oferecerApp, setOferecerApp] = useState(false);
-  const [papel, setPapel] = useState<Papel>("aluno");
+  // o aplicativo. A checagem só existe no navegador, e o instantâneo do
+  // servidor é `false`, então a tela do servidor e a do cliente não divergem.
+  const oferecerApp = useSyncExternalStore(
+    () => () => {},
+    () => !temCascaNativa(),
+    () => false,
+  );
 
   const [codigo, setCodigo] = useState("");
   const [pin, setPin] = useState("");
@@ -103,7 +106,6 @@ export default function Entrada() {
 
     buscarTurma(guardado).then((achada) => {
       if (!achada) return localStorage.removeItem(MEMORIA);
-      setPapel("aluno");
       abrirTurma(achada, "aluno");
     });
   }, [buscarTurma, abrirTurma]);
@@ -246,10 +248,6 @@ export default function Entrada() {
     setCriando(false);
   }
 
-  useEffect(() => {
-    setOferecerApp(!temCascaNativa());
-  }, []);
-
   if (etapa === "escolha") {
     return (
       <Moldura>
@@ -267,7 +265,6 @@ export default function Entrada() {
               titulo="Sou professor(a)"
               descricao="Acessar com o código da escola"
               aoClicar={() => {
-                setPapel("professor");
                 setEtapa("escola");
               }}
             />
@@ -276,7 +273,6 @@ export default function Entrada() {
               titulo="Sou aluno(a)"
               descricao="Entrar com o código da turma e o seu PIN"
               aoClicar={() => {
-                setPapel("aluno");
                 setEtapa("codigo");
               }}
             />

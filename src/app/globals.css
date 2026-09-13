@@ -10,6 +10,9 @@
   --texto: #eef4f8;
   --suave: #8ba3b5;
   --foco: #5fd3a0;
+  /* Identidade: marca onde você está e o que é seu. Fica longe do verde para
+     não competir com ele — verde é progresso, ciano é lugar. */
+  --realce: #3ed0e8;
   --pausa: #f0b05d;
   --alerta: #f2766b;
 }
@@ -22,6 +25,7 @@
   --color-texto: var(--texto);
   --color-suave: var(--suave);
   --color-foco: var(--foco);
+  --color-realce: var(--realce);
   --color-pausa: var(--pausa);
   --color-alerta: var(--alerta);
 

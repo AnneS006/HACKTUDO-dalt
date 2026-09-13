@@ -15,7 +15,18 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { FileCheck, Lock, LogOut, Shirt, ShoppingBag, Target, Trophy } from "lucide-react";
+import {
+  BookOpen,
+  Check,
+  ListChecks,
+  Lock,
+  LogOut,
+  PieChart,
+  ShoppingBag,
+  Target,
+  Trophy,
+  UserRound,
+} from "lucide-react";
 import { Avatar } from "@/components/avatar";
 import { Camera } from "@/components/camera";
 import { destravarNativo, temCascaNativa, travarNativo } from "@/lib/foco-nativo";
@@ -29,7 +40,6 @@ import {
   calcularCiclo,
   xpDaEntrega,
   chaveDeMateria,
-  contarPalavras,
   formatarTempo,
   medalhaPor,
   type Recompensa,
@@ -352,6 +362,7 @@ export default function TelaDoAluno() {
         eu={eu}
         turma={turma}
         liberado={liberado}
+        focoAtivo={sessao.focoAtivo}
         colegas={colegas}
         recompensas={recompensas}
         aoEquipar={equiparEnfeite}
@@ -825,17 +836,108 @@ function Coletiva({ ocupado, aoEnviar }: { ocupado: boolean; aoEnviar: AoEnviar 
 }
 
 const ABAS = [
-  { chave: "voce", rotulo: "Sua aula", icone: Target },
-  { chave: "avatar", rotulo: "Avatar", icone: Shirt },
-  { chave: "lojinha", rotulo: "Lojinha", icone: ShoppingBag },
-  { chave: "turma", rotulo: "Ranking", icone: Trophy },
-  { chave: "entregas", rotulo: "Entregas", icone: FileCheck },
+  {
+    chave: "voce",
+    rotulo: "Minhas Tarefas",
+    curto: "Tarefas",
+    icone: ListChecks,
+    titulo: "Atividades Lançadas",
+    subtitulo: "Entregue as tarefas para acumular XP e liberar acessórios de avatar",
+  },
+  {
+    chave: "avatar",
+    rotulo: "Personalizar Avatar",
+    curto: "Avatar",
+    icone: UserRound,
+    titulo: "Personalizar Avatar",
+    subtitulo: "Itens que você desbloqueia entregando atividades",
+  },
+  {
+    chave: "lojinha",
+    rotulo: "Lojinha de Prêmios",
+    curto: "Lojinha",
+    icone: ShoppingBag,
+    titulo: "Lojinha de Recompensas",
+    subtitulo: "Troque seus XP por vantagens reais postadas por quem dá a aula",
+  },
+  {
+    chave: "turma",
+    rotulo: "Ver Ranking",
+    curto: "Ranking",
+    icone: Trophy,
+    titulo: "Ranking de XP da Turma",
+    subtitulo: "Acompanhe seu percurso em relação aos colegas",
+  },
+  {
+    chave: "entregas",
+    rotulo: "Relatório de Entrega",
+    curto: "Relatório",
+    icone: PieChart,
+    titulo: "Relatório de Atividades Entregues",
+    subtitulo: "Resumo do que você entregou, por matéria",
+  },
 ] as const;
+
+/** Número grande com rótulo em cima, para as três caixas do relatório. */
+function Estatistica({ rotulo, valor, cor }: { rotulo: string; valor: string; cor: string }) {
+  return (
+    <div className="rounded-2xl border border-borda bg-superficie p-5">
+      <p className="text-[10px] uppercase tracking-[0.18em] text-suave">{rotulo}</p>
+      <p className={`mt-2 font-titulo text-3xl font-bold ${cor}`}>{valor}</p>
+    </div>
+  );
+}
+
+/** Etiqueta pequena: selo da marca, medalha recebida, tipo de atividade. */
+function Selo({
+  children,
+  tom = "neutro",
+}: {
+  children: React.ReactNode;
+  tom?: "neutro" | "foco" | "realce";
+}) {
+  const tons = {
+    neutro: "border-borda bg-superficie-alta text-suave",
+    foco: "border-foco/30 bg-foco/10 text-foco",
+    realce: "border-realce/30 bg-realce/10 text-realce",
+  };
+  return (
+    <span
+      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium ${tons[tom]}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+/** Quadrado com emoji ou ícone que abre cada linha de lista. */
+function Quadro({
+  children,
+  tom = "realce",
+}: {
+  children: React.ReactNode;
+  tom?: "realce" | "pausa" | "foco" | "apagado";
+}) {
+  const tons = {
+    realce: "bg-realce/10 text-realce",
+    pausa: "bg-pausa/10 text-pausa",
+    foco: "bg-foco/10 text-foco",
+    apagado: "bg-superficie-alta text-suave",
+  };
+  return (
+    <span
+      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg ${tons[tom]}`}
+    >
+      {children}
+    </span>
+  );
+}
 
 function PainelDoAluno({
   eu,
   turma,
   liberado,
+  focoAtivo,
   colegas,
   recompensas,
   aoEquipar,
@@ -845,6 +947,7 @@ function PainelDoAluno({
   eu: Pessoa;
   turma: Turma;
   liberado: boolean;
+  focoAtivo: boolean;
   colegas: Pessoa[];
   recompensas: Recompensa[];
   aoEquipar: (enfeite: string) => void;
@@ -857,243 +960,473 @@ function PainelDoAluno({
   const xp = eu.xp ?? 0;
   const medalhas = (eu.medalhas ?? []).map(medalhaPor).filter(Boolean);
   const porMateria = Object.entries(eu.porMateria ?? {}).sort((a, b) => b[1] - a[1]);
+  // O total das matérias pode ser menor que `entregas`: quem entregou antes de
+  // a disciplina passar a ser gravada na resposta não tem matéria registrada.
+  const totalPorMateria = porMateria.reduce((soma, [, quantas]) => soma + quantas, 0) || 1;
+  const proximoEnfeite = ENFEITES.find((item) => entregas < item.exige);
   const ranking = [...colegas].sort((a, b) => (b.xp ?? 0) - (a.xp ?? 0));
+  const cabecalho = ABAS.find((a) => a.chave === aba)!;
 
   return (
-    <div className="flex min-h-dvh">
-      <aside className="hidden w-64 shrink-0 flex-col justify-between border-r border-borda bg-superficie md:flex">
-        <div>
-          <div className="flex items-center gap-3 border-b border-borda p-5">
-            <Avatar pessoa={eu} tamanho="m" />
-            <div className="min-w-0">
-              <p className="truncate text-sm">{eu.nome}</p>
-              <p className="font-mono text-xs text-foco">{xp} XP</p>
-            </div>
+    <div className="flex min-h-dvh flex-col">
+      {/* Faixa da marca. Some no celular, onde cada pixel de altura conta. */}
+      <header className="hidden items-center justify-between border-b border-borda bg-superficie px-5 py-3 md:flex">
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-foco font-titulo text-lg font-bold text-fundo">
+            d
+          </span>
+          <div>
+            <p className="flex items-center gap-2 font-titulo text-sm font-bold leading-none">
+              DALT
+              <Selo tom="foco">EDTECH</Selo>
+            </p>
+            <p className="mt-1 text-[11px] leading-none text-suave">Aprendizado vivo e focado</p>
           </div>
-
-          <nav className="mt-4 flex flex-col gap-1 px-3">
-            {ABAS.map(({ chave, rotulo, icone: Icone }) => (
-              <button
-                key={chave}
-                onClick={() => setAba(chave)}
-                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${
-                  aba === chave
-                    ? "bg-foco/10 text-foco"
-                    : "text-suave hover:bg-superficie-alta hover:text-texto"
-                }`}
-              >
-                <Icone size={18} strokeWidth={1.75} aria-hidden="true" />
-                {rotulo}
-              </button>
-            ))}
-          </nav>
         </div>
 
         <button
           onClick={aoSair}
-          className="m-3 flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-suave transition hover:bg-superficie-alta hover:text-texto"
+          className="flex items-center gap-2 rounded-xl border border-borda px-3 py-2 text-xs text-suave transition hover:border-realce/40 hover:text-texto"
         >
-          <LogOut size={16} aria-hidden="true" />
-          Trocar perfil
+          <LogOut size={14} aria-hidden="true" />
+          Trocar usuário / Sair
         </button>
-      </aside>
+      </header>
 
-      <main className="min-w-0 flex-1 px-6 py-8 pb-28 md:pb-8">
-        <header className="mb-8 flex items-center gap-3">
-          <Avatar pessoa={eu} tamanho="m" />
-          <div className="min-w-0 flex-1">
-            <p className="truncate font-titulo text-lg font-bold">{eu.nome}</p>
-            <p className="text-xs text-suave">
-              {turma.nome} · <span className="font-mono text-foco">{xp} XP</span>
-            </p>
-          </div>
-          <button onClick={aoSair} className="text-suave md:hidden" title="Trocar perfil">
-            <LogOut size={18} aria-hidden="true" />
-          </button>
-        </header>
-
-        {aba === "voce" && (
-          <>
-            <div className="rounded-3xl border border-borda bg-superficie p-6">
-              <p className="text-xs uppercase tracking-[0.2em] text-suave">
-                {liberado ? "Fora do modo aula" : "Aguardando"}
-              </p>
-              <h1 className="mt-2 font-titulo text-2xl font-bold">
-                {liberado ? "Você está liberado desta atividade" : "A aula ainda não começou"}
-              </h1>
-              <p className="mt-3 text-sm leading-relaxed text-suave">
-                {liberado
-                  ? "Quem está dando a aula te tirou do foco. Pode guardar o celular."
-                  : "Quando a aula abrir, esta tela vira o Modo Aula sozinha."}
-              </p>
-            </div>
-
-            <h2 className="mt-8 text-xs uppercase tracking-[0.15em] text-suave">
-              Seus reconhecimentos
-            </h2>
-            {medalhas.length > 0 ? (
-              <ul className="mt-3 space-y-2">
-                {medalhas.map((medalha) => (
-                  <li
-                    key={medalha!.id}
-                    className="flex items-center gap-3 rounded-2xl border border-borda bg-superficie p-4"
-                  >
-                    <span className="text-2xl" aria-hidden="true">
-                      {medalha!.enfeite}
-                    </span>
-                    <span>
-                      <span className="block text-sm font-medium">{medalha!.nome}</span>
-                      <span className="block text-xs text-suave">{medalha!.descricao}</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-3 text-sm text-suave">
-                Ainda nenhum. Uns vêm de quem dá a aula, outros o app dá sozinho conforme você
-                entrega.
-              </p>
-            )}
-          </>
-        )}
-
-        {aba === "avatar" && (
-          <>
-            <div className="flex items-center gap-5 rounded-3xl border border-borda bg-superficie p-6">
-              <Avatar pessoa={eu} tamanho="g" />
-              <div>
-                <p className="font-titulo text-lg font-bold">{entregas} entregas</p>
-                <p className="text-xs text-suave">Cada duas entregas liberam um item. Não custa XP.</p>
+      <div className="flex min-h-0 flex-1">
+        <aside className="hidden w-64 shrink-0 flex-col justify-between border-r border-borda bg-superficie md:flex">
+          <div className="p-3">
+            <div className="flex items-center gap-3 rounded-2xl border border-realce/25 bg-realce/5 p-3">
+              <Avatar pessoa={eu} tamanho="m" />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">{eu.nome}</p>
+                <p className="font-mono text-xs text-foco">{xp} XP</p>
               </div>
             </div>
 
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              {ENFEITES.map((item) => {
-                const temItem = entregas >= item.exige;
-                const usando = eu.enfeite === item.enfeite;
+            <p className="mt-6 px-3 text-[10px] uppercase tracking-[0.18em] text-suave">
+              Painel do aluno
+            </p>
+
+            <nav className="mt-2 flex flex-col gap-1">
+              {ABAS.map(({ chave, rotulo, icone: IconeDaAba }) => (
+                <button
+                  key={chave}
+                  onClick={() => setAba(chave)}
+                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${
+                    aba === chave
+                      ? "bg-realce font-semibold text-fundo"
+                      : "text-suave hover:bg-superficie-alta hover:text-texto"
+                  }`}
+                >
+                  <IconeDaAba size={18} strokeWidth={1.75} aria-hidden="true" />
+                  {rotulo}
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          <div className="border-t border-borda p-3">
+            <EstadoDoFoco focoAtivo={focoAtivo} liberado={liberado} compacto />
+          </div>
+        </aside>
+
+        <main className="min-w-0 flex-1 px-6 py-8 pb-28 md:pb-10">
+          {/* No celular a faixa da marca não existe, então o avatar e a saída
+              voltam para cá: sem isso não haveria como trocar de perfil. */}
+          <div className="mb-6 flex items-center gap-3 md:hidden">
+            <Avatar pessoa={eu} tamanho="m" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-titulo text-lg font-bold">{eu.nome}</p>
+              <p className="font-mono text-xs text-foco">{xp} XP</p>
+            </div>
+            <button onClick={aoSair} className="text-suave" title="Trocar perfil">
+              <LogOut size={18} aria-hidden="true" />
+            </button>
+          </div>
+
+          <header className="mb-8">
+            <h1 className="font-titulo text-2xl font-bold sm:text-3xl">{cabecalho.titulo}</h1>
+            <p className="mt-1.5 text-sm text-suave">
+              {cabecalho.subtitulo}
+              {aba === "turma" && (
+                <>
+                  {" na turma "}
+                  <span className="font-semibold text-texto">{turma.nome}</span>
+                </>
+              )}
+            </p>
+          </header>
+
+          {aba === "voce" && (
+            <>
+              <div className="rounded-2xl border border-borda bg-superficie p-6">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-suave">
+                  {liberado ? "Fora do modo aula" : "Aguardando"}
+                </p>
+                <h2 className="mt-2 font-titulo text-xl font-bold">
+                  {liberado ? "Você está liberado desta atividade" : "A aula ainda não começou"}
+                </h2>
+                <p className="mt-3 text-sm leading-relaxed text-suave">
+                  {liberado
+                    ? "Quem está dando a aula te tirou do foco. Pode guardar o celular."
+                    : "Quando quem dá a aula abrir o foco, esta tela vira o Modo Aula sozinha e a tarefa aparece aqui."}
+                </p>
+              </div>
+
+              <h2 className="mt-8 text-[10px] uppercase tracking-[0.18em] text-suave">
+                Seus reconhecimentos
+              </h2>
+              {medalhas.length > 0 ? (
+                <ul className="mt-3 space-y-2">
+                  {medalhas.map((medalha) => (
+                    <li
+                      key={medalha!.id}
+                      className="flex items-center gap-3 rounded-2xl border border-borda bg-superficie p-4"
+                    >
+                      <Quadro tom="pausa">{medalha!.enfeite}</Quadro>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold">{medalha!.nome}</span>
+                        <span className="block text-xs text-suave">{medalha!.descricao}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-3 text-sm text-suave">
+                  Ainda nenhum. Uns vêm de quem dá a aula, outros o app dá sozinho conforme você
+                  entrega.
+                </p>
+              )}
+
+              <div className="mt-8 md:hidden">
+                <EstadoDoFoco focoAtivo={focoAtivo} liberado={liberado} />
+              </div>
+            </>
+          )}
+
+          {aba === "avatar" && (
+            <>
+              <p className="flex gap-3 rounded-2xl border border-pausa/25 bg-pausa/5 p-4 text-sm leading-relaxed">
+                <span aria-hidden="true">💡</span>
+                <span>
+                  <span className="font-semibold">Regra especial:</span> os acessórios do avatar{" "}
+                  <span className="font-semibold">não gastam XP</span>. Eles são liberados sozinhos
+                  a cada duas atividades entregues.
+                </span>
+              </p>
+
+              <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,16rem)_1fr]">
+                <div className="flex flex-col items-center rounded-2xl border border-borda bg-superficie p-6">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-suave">Seu avatar</p>
+                  <span className="mt-5 rounded-full ring-2 ring-realce ring-offset-4 ring-offset-superficie">
+                    <Avatar pessoa={eu} tamanho="gg" />
+                  </span>
+                  <p className="mt-6 font-mono text-xs text-foco">Entregas: {entregas}</p>
+                </div>
+
+                <ul className="space-y-3">
+                  {ENFEITES.map((item) => {
+                    const temItem = entregas >= item.exige;
+                    const usando = eu.enfeite === item.enfeite;
+                    return (
+                      <li key={item.enfeite}>
+                        <button
+                          onClick={() => temItem && aoEquipar(item.enfeite)}
+                          disabled={!temItem}
+                          className={`flex w-full items-center gap-4 rounded-2xl border p-4 text-left transition ${
+                            usando
+                              ? "border-foco bg-foco/5"
+                              : temItem
+                                ? "border-borda bg-superficie hover:border-realce/40"
+                                : "border-borda bg-superficie"
+                          }`}
+                        >
+                          <Quadro tom={temItem ? "realce" : "apagado"}>{item.enfeite}</Quadro>
+                          <span className="min-w-0 flex-1">
+                            <span
+                              className={`block text-sm font-semibold ${temItem ? "" : "text-suave"}`}
+                            >
+                              {item.nome}
+                            </span>
+                            <span className="block text-xs text-suave">
+                              Requisito: {item.exige} atividades entregues
+                            </span>
+                          </span>
+                          <span
+                            className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium ${
+                              usando
+                                ? "bg-foco/10 text-foco"
+                                : temItem
+                                  ? "bg-realce/10 text-realce"
+                                  : "bg-superficie-alta text-suave"
+                            }`}
+                          >
+                            {usando ? (
+                              <>
+                                <Check size={13} aria-hidden="true" />
+                                Equipado
+                              </>
+                            ) : temItem ? (
+                              "Equipar"
+                            ) : (
+                              <>
+                                <Lock size={13} aria-hidden="true" />
+                                Bloqueado
+                              </>
+                            )}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </>
+          )}
+
+          {aba === "lojinha" && (
+            <>
+              <div className="mb-6 inline-flex flex-col rounded-2xl border border-pausa/30 bg-pausa/5 px-4 py-3">
+                <span className="text-[10px] uppercase tracking-[0.18em] text-suave">Seu saldo</span>
+                <span className="font-mono text-lg font-bold text-pausa">{xp} XP</span>
+              </div>
+
+              {recompensas.length === 0 ? (
+                <p className="text-sm text-suave">Quem dá a aula ainda não colocou prêmios aqui.</p>
+              ) : (
+                <ul className="grid gap-4 sm:grid-cols-2">
+                  {recompensas.map((r) => {
+                    const podePagar = xp >= r.custo;
+                    const jaResgatou = eu.resgates?.includes(r.titulo) ?? false;
+                    return (
+                      <li
+                        key={r.id}
+                        className="flex flex-col justify-between rounded-2xl border border-borda bg-superficie p-5"
+                      >
+                        <div className="flex items-start gap-3">
+                          <Quadro tom="pausa">{r.enfeite}</Quadro>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold leading-snug">{r.titulo}</p>
+                            <p className="mt-1 text-xs text-suave">
+                              {jaResgatou
+                                ? "Já resgatado. Combine com quem dá a aula quando usar."
+                                : "Combine com quem dá a aula quando for usar."}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-5 flex items-center justify-between gap-3">
+                          <span className="font-mono text-sm font-bold text-pausa">
+                            {r.custo} XP
+                          </span>
+                          <button
+                            onClick={() => aoResgatar(r)}
+                            disabled={!podePagar}
+                            className={`rounded-xl px-4 py-2 text-xs font-semibold transition ${
+                              podePagar
+                                ? "bg-pausa text-fundo hover:brightness-110"
+                                : "bg-superficie-alta text-suave"
+                            }`}
+                          >
+                            {podePagar ? "Resgatar" : `Faltam ${r.custo - xp} XP`}
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </>
+          )}
+
+          {aba === "turma" && (
+            <ol className="space-y-3">
+              {ranking.map((colega, posicao) => {
+                const souEu = colega.id === eu.id;
+                const seus = (colega.medalhas ?? []).map(medalhaPor).filter(Boolean);
+                const feitas = colega.entregas ?? 0;
                 return (
-                  <button
-                    key={item.enfeite}
-                    onClick={() => temItem && aoEquipar(item.enfeite)}
-                    disabled={!temItem}
-                    className={`flex items-center gap-4 rounded-2xl border p-4 text-left transition ${
-                      usando
-                        ? "border-foco bg-foco/10"
-                        : temItem
-                          ? "border-borda bg-superficie hover:border-foco"
-                          : "border-borda bg-superficie opacity-50"
+                  <li
+                    key={colega.id}
+                    className={`flex items-center gap-4 rounded-2xl border p-4 ${
+                      souEu ? "border-realce bg-realce/5" : "border-borda bg-superficie"
                     }`}
                   >
-                    <span className="text-3xl" aria-hidden="true">
-                      {item.enfeite}
+                    <span
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                        posicao === 0
+                          ? "bg-pausa text-fundo"
+                          : posicao === 1
+                            ? "bg-suave text-fundo"
+                            : posicao === 2
+                              ? "bg-alerta text-fundo"
+                              : "bg-superficie-alta text-suave"
+                      }`}
+                    >
+                      {posicao + 1}º
                     </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-medium">{item.nome}</span>
-                      <span className="block text-xs text-suave">
-                        {usando
-                          ? "usando agora"
-                          : temItem
-                            ? "toque para usar"
-                            : `faltam ${item.exige - entregas} entregas`}
-                      </span>
-                    </span>
-                    {!temItem && <Lock size={16} className="shrink-0 text-suave" aria-hidden="true" />}
-                  </button>
+
+                    <div className="min-w-0 flex-1">
+                      <p className={`truncate text-sm font-semibold ${souEu ? "text-realce" : ""}`}>
+                        {colega.nome}
+                        {souEu && " (você)"}
+                      </p>
+                      {seus.length > 0 && (
+                        <span className="mt-1.5 flex flex-wrap gap-1.5">
+                          {seus.map((m) => (
+                            <Selo key={m!.id} tom="foco">
+                              {m!.nome}
+                            </Selo>
+                          ))}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="shrink-0 text-right">
+                      <p className="font-mono text-sm font-bold text-foco">{colega.xp ?? 0} XP</p>
+                      <p className="mt-0.5 text-[11px] text-suave">
+                        {feitas} {feitas === 1 ? "entrega" : "entregas"}
+                      </p>
+                    </div>
+                  </li>
                 );
               })}
-            </div>
-          </>
-        )}
+            </ol>
+          )}
 
-        {aba === "lojinha" && (
-          <ul className="space-y-2">
-            {recompensas.map((r) => {
-              const podePagar = xp >= r.custo;
-              return (
-                <li key={r.id} className="flex items-center gap-3 rounded-2xl border border-borda p-3">
-                  <span className="text-2xl" aria-hidden="true">
-                    {r.enfeite}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm">{r.titulo}</span>
-                    <span className="font-mono text-xs text-suave">{r.custo} XP</span>
-                  </span>
-                  <button
-                    onClick={() => aoResgatar(r)}
-                    disabled={!podePagar}
-                    className="shrink-0 rounded-xl bg-foco px-4 py-2 text-xs font-semibold text-fundo disabled:opacity-30"
-                  >
-                    {podePagar ? "Resgatar" : `faltam ${r.custo - xp}`}
-                  </button>
-                </li>
-              );
-            })}
-            {(eu.resgates?.length ?? 0) > 0 && (
-              <li className="pt-2 text-xs text-suave">
-                Já resgatou: {eu.resgates!.join(", ")}. Combine com quem dá a aula quando usar.
-              </li>
-            )}
-          </ul>
-        )}
+          {aba === "entregas" && (
+            <>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Estatistica rotulo="Total de entregas" valor={String(entregas)} cor="text-texto" />
+                <Estatistica rotulo="XP acumulado" valor={`${xp} XP`} cor="text-foco" />
+                <Estatistica
+                  rotulo="Medalhas recebidas"
+                  valor={String(medalhas.length)}
+                  cor="text-pausa"
+                />
+              </div>
 
-        {aba === "turma" && (
-          <ol className="space-y-1.5">
-            {ranking.map((colega, posicao) => (
-              <li
-                key={colega.id}
-                className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm ${
-                  colega.id === eu.id ? "bg-foco/10 text-foco" : "text-suave"
-                }`}
-              >
-                <span className="w-5 shrink-0 text-center font-mono text-xs">{posicao + 1}</span>
-                <span className="min-w-0 flex-1 truncate">
-                  {colega.nome}
-                  {colega.id === eu.id && " · você"}
-                </span>
-                <span className="shrink-0 font-mono text-xs">{colega.xp ?? 0}</span>
-              </li>
-            ))}
-          </ol>
-        )}
+              {porMateria.length > 0 ? (
+                <section className="mt-6 rounded-2xl border border-borda bg-superficie p-5">
+                  <h2 className="text-[10px] uppercase tracking-[0.18em] text-suave">
+                    Onde você entregou
+                  </h2>
+                  {/* A porcentagem é a fatia do seu próprio total, não uma meta:
+                      com uma matéria só ela dá 100%, e isso está certo. */}
+                  <ul className="mt-4 space-y-3">
+                    {porMateria.map(([materia, quantas]) => (
+                      <li
+                        key={materia}
+                        className="flex items-center gap-4 rounded-xl border border-borda bg-superficie-alta p-4"
+                      >
+                        <Quadro tom="realce">
+                          <BookOpen size={18} strokeWidth={1.75} aria-hidden="true" />
+                        </Quadro>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold">{materia}</span>
+                          <span className="block text-xs text-suave">
+                            {quantas} {quantas === 1 ? "atividade entregue" : "atividades entregues"}
+                          </span>
+                        </span>
+                        <span className="shrink-0 font-mono text-xs text-foco">
+                          {Math.round((quantas / totalPorMateria) * 100)}% do seu total
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : (
+                <p className="mt-6 text-sm text-suave">
+                  Assim que você enviar sua primeira atividade, ela aparece aqui — e continua aqui
+                  depois que a aula acabar.
+                </p>
+              )}
 
-        {aba === "entregas" &&
-          (porMateria.length > 0 ? (
-            <ul className="space-y-4">
-              {porMateria.map(([materia, quantas]) => (
-                <li key={materia}>
-                  <div className="flex items-baseline justify-between text-sm">
-                    <span>{materia}</span>
-                    <span className="font-mono text-xs text-suave">{quantas}</span>
-                  </div>
-                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-superficie-alta">
-                    <div
-                      className="h-full rounded-full bg-foco"
-                      style={{ width: `${(quantas / Math.max(...porMateria.map((m) => m[1]))) * 100}%` }}
-                    />
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-suave">Suas entregas aparecem aqui, separadas por matéria.</p>
-          ))}
-      </main>
+              {proximoEnfeite && (
+                <p className="mt-6 text-sm text-suave">
+                  Faltam {proximoEnfeite.exige - entregas}{" "}
+                  {proximoEnfeite.exige - entregas === 1 ? "entrega" : "entregas"} para liberar{" "}
+                  <span className="text-texto">
+                    {proximoEnfeite.enfeite} {proximoEnfeite.nome}
+                  </span>{" "}
+                  no avatar.
+                </p>
+              )}
+
+              <div className="mt-8">
+                <EstadoDoFoco focoAtivo={focoAtivo} liberado={liberado} />
+              </div>
+            </>
+          )}
+        </main>
+      </div>
 
       {/* No celular a lateral não cabe, então o menu vira barra fixa embaixo. */}
       <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-borda bg-superficie md:hidden">
-        {ABAS.map(({ chave, rotulo, icone: Icone }) => (
+        {ABAS.map(({ chave, curto, rotulo, icone: IconeDaAba }) => (
           <button
             key={chave}
             onClick={() => setAba(chave)}
-            className={`flex flex-1 flex-col items-center gap-1 py-3 text-[10px] transition ${
-              aba === chave ? "text-foco" : "text-suave"
+            aria-label={rotulo}
+            className={`flex flex-1 flex-col items-center gap-1 px-1 py-3 text-[10px] leading-tight transition ${
+              aba === chave ? "text-realce" : "text-suave"
             }`}
           >
-            <Icone size={20} strokeWidth={1.75} aria-hidden="true" />
-            {rotulo}
+            <IconeDaAba size={20} strokeWidth={1.75} aria-hidden="true" />
+            {curto}
           </button>
         ))}
       </nav>
+    </div>
+  );
+}
+
+/**
+ * Quem abre o foco é quem dá a aula, nunca o aluno: a turma inteira entra e sai
+ * junto, e é isso que faz o Modo Aula valer como combinado de sala. Então aqui
+ * não existe botão que ligue o foco — existe o estado, dito com todas as letras,
+ * para o aluno saber o que esperar da própria tela.
+ */
+function EstadoDoFoco({
+  focoAtivo,
+  liberado,
+  compacto = false,
+}: {
+  focoAtivo: boolean;
+  liberado: boolean;
+  compacto?: boolean;
+}) {
+  const ligado = focoAtivo && !liberado;
+
+  if (compacto) {
+    return (
+      <p className="flex items-center gap-2 rounded-xl bg-superficie-alta px-3 py-2.5 text-xs text-suave">
+        <Target
+          size={15}
+          className={ligado ? "text-foco" : ""}
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
+        {liberado ? "Você está liberado" : ligado ? "Modo Foco ligado" : "Aguardando a aula abrir"}
+      </p>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-borda bg-superficie p-6 text-center">
+      <h2 className="font-titulo text-lg font-bold">
+        {liberado ? "Você está fora do foco" : "O Modo Foco começa na aula"}
+      </h2>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-suave">
+        {liberado
+          ? "Quem dá a aula te liberou desta atividade. Quando a próxima abrir, esta tela volta sozinha para o foco."
+          : "Quem dá a aula liga o foco e o app toma a tela de todos os celulares da turma ao mesmo tempo. Você não precisa fazer nada: esta tela muda sozinha."}
+      </p>
+      <p className="mt-5 inline-flex items-center gap-2 rounded-xl bg-superficie-alta px-4 py-2.5 text-xs text-suave">
+        <Target size={15} strokeWidth={1.75} aria-hidden="true" />
+        Aguardando quem dá a aula
+      </p>
     </div>
   );
 }
