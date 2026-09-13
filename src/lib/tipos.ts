@@ -4,6 +4,8 @@ export interface Escola {
   id: string;
   nome: string;
   cidade: string;
+  // Código institucional que a escola entrega a quem dá aula.
+  codigo: string;
 }
 
 export interface Turma {
@@ -11,6 +13,10 @@ export interface Turma {
   escolaId: string;
   nome: string;
   codigo: string;
+  // Quem pode abrir esta turma. Guardado aqui para listar as turmas de alguém
+  // sem varrer as pessoas de todas as turmas da escola.
+  professorIds?: string[];
+  recompensas?: Recompensa[];
   periodoMin: number;
   focoMin: number;
   pausaMin: number;
@@ -24,11 +30,61 @@ export interface Pessoa {
   foto?: string;
   // Só para quem dá aula: contextualiza a atividade que a IA escreve.
   materia?: string;
-  // Só para aluno: reconhecimento e progressão.
+  // Só para aluno: PIN de 4 dígitos que a escola entrega, reconhecimento e
+  // progressão. O PIN não é conta: não tem e-mail, cadastro nem recuperação.
+  pin?: string;
   medalhas?: string[];
   entregas?: number;
   enfeite?: string;
+  xp?: number;
+  resgates?: string[];
+  // Entregas somadas por disciplina, para o relatório do aluno sobreviver ao
+  // fim da aula: as respostas da sessão são apagadas a cada nova atividade.
+  porMateria?: Record<string, number>;
 }
+
+/** Firestore trata ponto como separador de caminho dentro do documento. */
+export function chaveDeMateria(materia: string): string {
+  return materia.trim().replace(/[.~*/[\]]/g, "").slice(0, 40) || "Geral";
+}
+
+/** Identificador estável a partir do nome, sem acento e sem espaço. */
+export function identificador(nome: string): string {
+  return nome
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 60);
+}
+
+/** Código de turma curto, sem caracteres que se confundem ao ditar em sala. */
+export function codigoDeTurma(nome: string): string {
+  const letras = identificador(nome).replace(/-/g, "").toUpperCase().slice(0, 3) || "TUR";
+  return `${letras}${Math.floor(10 + Math.random() * 89)}`;
+}
+
+/** PIN de quatro dígitos distinto por posição na lista da turma. */
+export function pinDaPosicao(posicao: number): string {
+  return String(posicao + 1).padStart(2, "0").repeat(2);
+}
+
+export const XP_POR_ENTREGA = 50;
+
+export interface Recompensa {
+  id: string;
+  titulo: string;
+  custo: number;
+  enfeite: string;
+}
+
+export const RECOMPENSAS_INICIAIS: Recompensa[] = [
+  { id: "livres", titulo: "10 minutos livres", custo: 300, enfeite: "⏱️" },
+  { id: "pular", titulo: "Pular uma tarefa", custo: 500, enfeite: "⏭️" },
+  { id: "musica", titulo: "Escolher a música", custo: 200, enfeite: "🎵" },
+  { id: "dica", titulo: "Dica extra na prova", custo: 800, enfeite: "💡" },
+];
 
 // Reconhecimento que a professora dá na mão, por comportamento que nota em
 // sala. Não são pontos e não se comparam entre alunos de propósito: ranking
@@ -49,8 +105,23 @@ export const ENFEITES = [
   { enfeite: "✨", nome: "Brilho", exige: 8 },
 ] as const;
 
+// Estas o app dá sozinho, por fato registrado: não dependem de alguém notar.
+export const MEDALHAS_AUTOMATICAS = [
+  { id: "assiduo", nome: "Entrega sempre", enfeite: "🔥", descricao: "Chegou a cinco entregas" },
+  { id: "desempenho", nome: "Bom desempenho", enfeite: "🎯", descricao: "Acertou 80% ou mais de um quiz" },
+] as const;
+
 export function medalhaPor(id: string) {
-  return MEDALHAS.find((m) => m.id === id);
+  return [...MEDALHAS, ...MEDALHAS_AUTOMATICAS].find((m) => m.id === id);
+}
+
+/**
+ * Entrega vale XP fixo; acerto vale mais. Assim quem se dedica ao conteúdo
+ * avança mais rápido que quem só clica em enviar.
+ */
+export function xpDaEntrega(acertos?: number, total?: number): number {
+  if (!total) return XP_POR_ENTREGA;
+  return XP_POR_ENTREGA + Math.round((acertos ?? 0) / total * XP_POR_ENTREGA);
 }
 
 export type TipoAtividade =
@@ -94,6 +165,9 @@ export interface Sessao {
   // diz ao aluno que comecou uma rodada nova; o titulo nao serve, porque
   // reenviar uma atividade salva repete o titulo.
   publicadaEm: Date | null;
+  // Disciplina de quem publicou, para a entrega do aluno saber a que materia
+  // pertence sem ele precisar escolher nada.
+  materia?: string;
 }
 
 export interface Resposta {
@@ -101,6 +175,9 @@ export interface Resposta {
   pessoaId: string;
   nome: string;
   tipo: TipoAtividade;
+  // Guardado na entrega para o relatório do aluno sair por matéria de verdade,
+  // em vez de somar tudo num número só.
+  materia?: string;
   texto?: string;
   imagem?: string;
   respostas?: string[];

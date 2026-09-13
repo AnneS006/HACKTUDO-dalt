@@ -17,8 +17,8 @@ const db = getFirestore(app);
 const CORES = ["#5fd3a0", "#f0b05d", "#f2766b", "#9d8cf5", "#5db8f0", "#f08fb8"];
 
 const escolas = [
-  { id: "emef-monteiro-lobato", nome: "EMEF Monteiro Lobato", cidade: "Gravataí, RS" },
-  { id: "ee-castro-alves", nome: "EE Castro Alves", cidade: "Porto Alegre, RS" },
+  { id: "emef-monteiro-lobato", nome: "EMEF Monteiro Lobato", cidade: "Gravataí, RS", codigo: "ESC-8842" },
+  { id: "ee-castro-alves", nome: "EE Castro Alves", cidade: "Porto Alegre, RS", codigo: "ESC-3310" },
 ];
 
 const turmas = [
@@ -99,14 +99,18 @@ function identificador(nome) {
 const lote = writeBatch(db);
 
 for (const escola of escolas) {
-  lote.set(doc(db, "escolas", escola.id), { nome: escola.nome, cidade: escola.cidade });
+  const { id, ...dadosDaEscola } = escola;
+  lote.set(doc(db, "escolas", id), dadosDaEscola);
 }
 
 let totalPessoas = 0;
 
 for (const turma of turmas) {
   const { id, professores, alunos, ...dados } = turma;
-  lote.set(doc(db, "turmas", id), dados);
+  lote.set(doc(db, "turmas", id), {
+    ...dados,
+    professorIds: professores.map((p) => identificador(p.nome)),
+  });
 
   lote.set(doc(db, "turmas", id, "sessao", "atual"), {
     atividade: null,
@@ -128,22 +132,31 @@ for (const turma of turmas) {
   // ficam invisíveis em uma demonstração curta. Varia de propósito: tem quem
   // ainda não entregou nada, e isso também precisa aparecer bem na tela.
   const percursos = [
-    { entregas: 7, medalhas: ["proativo", "cuidado"] },
-    { entregas: 4, medalhas: ["evolucao"] },
-    { entregas: 2, medalhas: [] },
-    { entregas: 6, medalhas: ["perguntas"] },
-    { entregas: 0, medalhas: [] },
-    { entregas: 3, medalhas: ["cuidado"] },
+    { entregas: 7, xp: 350, medalhas: ["proativo", "cuidado"], porMateria: { Matemática: 4, História: 3 } },
+    { entregas: 4, xp: 200, medalhas: ["evolucao"], porMateria: { Matemática: 3, História: 1 } },
+    { entregas: 2, xp: 100, medalhas: [], porMateria: { Matemática: 2 } },
+    { entregas: 6, xp: 300, medalhas: ["perguntas"], porMateria: { História: 4, Matemática: 2 } },
+    { entregas: 0, xp: 0, medalhas: [], porMateria: {} },
+    { entregas: 3, xp: 150, medalhas: ["cuidado"], porMateria: { Matemática: 2, História: 1 } },
   ];
 
   let alunoIndice = 0;
 
   gente.forEach((pessoa, indice) => {
-    const percurso = pessoa.papel === "aluno" ? percursos[alunoIndice++ % percursos.length] : {};
+    let extra = {};
+
+    if (pessoa.papel === "aluno") {
+      const posicao = alunoIndice++;
+      extra = {
+        ...percursos[posicao % percursos.length],
+        // Distintos e fáceis de ditar em sala: 0101, 0202, 0303...
+        pin: String(posicao + 1).padStart(2, "0").repeat(2),
+      };
+    }
 
     lote.set(doc(db, "turmas", id, "pessoas", identificador(pessoa.nome)), {
       ...pessoa,
-      ...percurso,
+      ...extra,
       cor: CORES[indice % CORES.length],
     });
     totalPessoas += 1;

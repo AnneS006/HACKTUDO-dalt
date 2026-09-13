@@ -35,7 +35,7 @@ service cloud.firestore {
           // A entrega só aceita os campos que o app envia, com teto de tamanho:
           // sem isso, o banco vira depósito de qualquer coisa.
           allow create: if request.resource.data.keys().hasOnly([
-                'pessoaId', 'nome', 'tipo', 'criadaEm',
+                'pessoaId', 'nome', 'tipo', 'criadaEm', 'materia',
                 'texto', 'imagem', 'respostas', 'acertos', 'total',
                 'opcao', 'palavras', 'peca'
               ])
