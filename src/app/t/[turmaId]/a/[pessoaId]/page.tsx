@@ -15,6 +15,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { FileCheck, Lock, LogOut, Shirt, ShoppingBag, Target, Trophy } from "lucide-react";
 import { Avatar } from "@/components/avatar";
 import { Camera } from "@/components/camera";
 import { GavetaFerramentas } from "@/components/ferramentas";
@@ -328,37 +329,20 @@ export default function TelaDoAluno() {
 
   const liberado = sessao.liberados.includes(pessoaId);
 
+  // O menu só existe fora do foco. Quando a aula abre, o app toma a tela e
+  // navegação nenhuma sobrevive — é esse o ponto do produto.
   if (!sessao.focoAtivo || liberado) {
     return (
-      <Centro>
-        <div className="flex flex-col items-center gap-4">
-          <Avatar pessoa={eu} tamanho="g" />
-          <p className="text-lg">{eu.nome}</p>
-        </div>
-        <h1 className="mt-8 text-2xl font-bold">
-          {liberado ? "Você está fora do modo aula" : "A aula ainda não começou"}
-        </h1>
-        <p className="mt-3 text-suave">
-          {liberado
-            ? "Quem está dando a aula te liberou desta atividade. Pode guardar o celular."
-            : `${turma.nome} · a aula começa quando a turma estiver pronta.`}
-        </p>
-        <PainelDoAluno
-          eu={eu}
-          colegas={colegas}
-          recompensas={recompensas}
-          aoEquipar={equiparEnfeite}
-          aoResgatar={resgatar}
-        />
-
-        {/* Só aqui: trocar de perfil no meio do foco esvaziaria o sentido dele. */}
-        <button
-          onClick={() => router.push("/")}
-          className="mt-10 text-sm text-suave underline-offset-4 hover:underline"
-        >
-          Não é você?
-        </button>
-      </Centro>
+      <PainelDoAluno
+        eu={eu}
+        turma={turma}
+        liberado={liberado}
+        colegas={colegas}
+        recompensas={recompensas}
+        aoEquipar={equiparEnfeite}
+        aoResgatar={resgatar}
+        aoSair={() => router.push("/")}
+      />
     );
   }
 
@@ -813,24 +797,31 @@ function Coletiva({ ocupado, aoEnviar }: { ocupado: boolean; aoEnviar: AoEnviar 
 }
 
 const ABAS = [
-  { chave: "voce", rotulo: "Você" },
-  { chave: "lojinha", rotulo: "Lojinha" },
-  { chave: "turma", rotulo: "Turma" },
-  { chave: "entregas", rotulo: "Entregas" },
+  { chave: "voce", rotulo: "Sua aula", icone: Target },
+  { chave: "avatar", rotulo: "Avatar", icone: Shirt },
+  { chave: "lojinha", rotulo: "Lojinha", icone: ShoppingBag },
+  { chave: "turma", rotulo: "Ranking", icone: Trophy },
+  { chave: "entregas", rotulo: "Entregas", icone: FileCheck },
 ] as const;
 
 function PainelDoAluno({
   eu,
+  turma,
+  liberado,
   colegas,
   recompensas,
   aoEquipar,
   aoResgatar,
+  aoSair,
 }: {
   eu: Pessoa;
+  turma: Turma;
+  liberado: boolean;
   colegas: Pessoa[];
   recompensas: Recompensa[];
   aoEquipar: (enfeite: string) => void;
   aoResgatar: (r: Recompensa) => void;
+  aoSair: () => void;
 }) {
   const [aba, setAba] = useState<(typeof ABAS)[number]["chave"]>("voce");
 
@@ -841,32 +832,85 @@ function PainelDoAluno({
   const ranking = [...colegas].sort((a, b) => (b.xp ?? 0) - (a.xp ?? 0));
 
   return (
-    <div className="surgir mt-10 w-full rounded-3xl border border-borda bg-superficie p-5 text-left">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-1.5">
-          {ABAS.map((item) => (
-            <button
-              key={item.chave}
-              onClick={() => setAba(item.chave)}
-              className={`rounded-xl px-3 py-1.5 text-xs transition ${
-                aba === item.chave ? "bg-foco font-medium text-fundo" : "text-suave hover:text-texto"
-              }`}
-            >
-              {item.rotulo}
-            </button>
-          ))}
-        </div>
-        <span className="shrink-0 font-mono text-sm text-foco">{xp} XP</span>
-      </div>
+    <div className="flex min-h-dvh">
+      <aside className="hidden w-64 shrink-0 flex-col justify-between border-r border-borda bg-superficie md:flex">
+        <div>
+          <div className="flex items-center gap-3 border-b border-borda p-5">
+            <Avatar pessoa={eu} tamanho="m" />
+            <div className="min-w-0">
+              <p className="truncate text-sm">{eu.nome}</p>
+              <p className="font-mono text-xs text-foco">{xp} XP</p>
+            </div>
+          </div>
 
-      <div className="mt-5">
+          <nav className="mt-4 flex flex-col gap-1 px-3">
+            {ABAS.map(({ chave, rotulo, icone: Icone }) => (
+              <button
+                key={chave}
+                onClick={() => setAba(chave)}
+                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${
+                  aba === chave
+                    ? "bg-foco/10 text-foco"
+                    : "text-suave hover:bg-superficie-alta hover:text-texto"
+                }`}
+              >
+                <Icone size={18} strokeWidth={1.75} aria-hidden="true" />
+                {rotulo}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        <button
+          onClick={aoSair}
+          className="m-3 flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-suave transition hover:bg-superficie-alta hover:text-texto"
+        >
+          <LogOut size={16} aria-hidden="true" />
+          Trocar perfil
+        </button>
+      </aside>
+
+      <main className="min-w-0 flex-1 px-6 py-8 pb-28 md:pb-8">
+        <header className="mb-8 flex items-center gap-3">
+          <Avatar pessoa={eu} tamanho="m" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-titulo text-lg font-bold">{eu.nome}</p>
+            <p className="text-xs text-suave">
+              {turma.nome} · <span className="font-mono text-foco">{xp} XP</span>
+            </p>
+          </div>
+          <button onClick={aoSair} className="text-suave md:hidden" title="Trocar perfil">
+            <LogOut size={18} aria-hidden="true" />
+          </button>
+        </header>
+
         {aba === "voce" && (
           <>
+            <div className="rounded-3xl border border-borda bg-superficie p-6">
+              <p className="text-xs uppercase tracking-[0.2em] text-suave">
+                {liberado ? "Fora do modo aula" : "Aguardando"}
+              </p>
+              <h1 className="mt-2 font-titulo text-2xl font-bold">
+                {liberado ? "Você está liberado desta atividade" : "A aula ainda não começou"}
+              </h1>
+              <p className="mt-3 text-sm leading-relaxed text-suave">
+                {liberado
+                  ? "Quem está dando a aula te tirou do foco. Pode guardar o celular."
+                  : "Quando a aula abrir, esta tela vira o Modo Aula sozinha."}
+              </p>
+            </div>
+
+            <h2 className="mt-8 text-xs uppercase tracking-[0.15em] text-suave">
+              Seus reconhecimentos
+            </h2>
             {medalhas.length > 0 ? (
-              <ul className="space-y-2">
+              <ul className="mt-3 space-y-2">
                 {medalhas.map((medalha) => (
-                  <li key={medalha!.id} className="flex items-center gap-3">
-                    <span className="text-xl" aria-hidden="true">
+                  <li
+                    key={medalha!.id}
+                    className="flex items-center gap-3 rounded-2xl border border-borda bg-superficie p-4"
+                  >
+                    <span className="text-2xl" aria-hidden="true">
                       {medalha!.enfeite}
                     </span>
                     <span>
@@ -877,35 +921,55 @@ function PainelDoAluno({
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-suave">
-                Ainda sem reconhecimentos. Eles vêm de quem dá a aula, pelo que ela vê em sala.
+              <p className="mt-3 text-sm text-suave">
+                Ainda nenhum. Uns vêm de quem dá a aula, outros o app dá sozinho conforme você
+                entrega.
               </p>
             )}
+          </>
+        )}
 
-            <p className="mt-6 text-xs uppercase tracking-[0.15em] text-suave">
-              Avatar · {entregas} {entregas === 1 ? "entrega" : "entregas"}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
+        {aba === "avatar" && (
+          <>
+            <div className="flex items-center gap-5 rounded-3xl border border-borda bg-superficie p-6">
+              <Avatar pessoa={eu} tamanho="g" />
+              <div>
+                <p className="font-titulo text-lg font-bold">{entregas} entregas</p>
+                <p className="text-xs text-suave">Cada duas entregas liberam um item. Não custa XP.</p>
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
               {ENFEITES.map((item) => {
-                const liberado = entregas >= item.exige;
+                const temItem = entregas >= item.exige;
                 const usando = eu.enfeite === item.enfeite;
                 return (
                   <button
                     key={item.enfeite}
-                    onClick={() => liberado && aoEquipar(item.enfeite)}
-                    disabled={!liberado}
-                    className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${
+                    onClick={() => temItem && aoEquipar(item.enfeite)}
+                    disabled={!temItem}
+                    className={`flex items-center gap-4 rounded-2xl border p-4 text-left transition ${
                       usando
-                        ? "border-foco bg-foco/10 text-foco"
-                        : liberado
-                          ? "border-borda hover:border-foco"
-                          : "border-borda text-suave/50"
+                        ? "border-foco bg-foco/10"
+                        : temItem
+                          ? "border-borda bg-superficie hover:border-foco"
+                          : "border-borda bg-superficie opacity-50"
                     }`}
                   >
-                    <span className="text-base" aria-hidden="true">
+                    <span className="text-3xl" aria-hidden="true">
                       {item.enfeite}
                     </span>
-                    {liberado ? item.nome : `faltam ${item.exige - entregas}`}
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-medium">{item.nome}</span>
+                      <span className="block text-xs text-suave">
+                        {usando
+                          ? "usando agora"
+                          : temItem
+                            ? "toque para usar"
+                            : `faltam ${item.exige - entregas} entregas`}
+                      </span>
+                    </span>
+                    {!temItem && <Lock size={16} className="shrink-0 text-suave" aria-hidden="true" />}
                   </button>
                 );
               })}
@@ -985,7 +1049,23 @@ function PainelDoAluno({
           ) : (
             <p className="text-sm text-suave">Suas entregas aparecem aqui, separadas por matéria.</p>
           ))}
-      </div>
+      </main>
+
+      {/* No celular a lateral não cabe, então o menu vira barra fixa embaixo. */}
+      <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-borda bg-superficie md:hidden">
+        {ABAS.map(({ chave, rotulo, icone: Icone }) => (
+          <button
+            key={chave}
+            onClick={() => setAba(chave)}
+            className={`flex flex-1 flex-col items-center gap-1 py-3 text-[10px] transition ${
+              aba === chave ? "text-foco" : "text-suave"
+            }`}
+          >
+            <Icone size={20} strokeWidth={1.75} aria-hidden="true" />
+            {rotulo}
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
