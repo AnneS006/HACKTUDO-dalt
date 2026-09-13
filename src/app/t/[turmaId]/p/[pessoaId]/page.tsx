@@ -187,6 +187,7 @@ export default function PainelProfessor() {
   const [medalhaEscolhida, setMedalhaEscolhida] = useState<string>(MEDALHAS[0].id);
   const [xpDaTarefa, setXpDaTarefa] = useState(String(XP_POR_ENTREGA));
   const [criandoPremio, setCriandoPremio] = useState(false);
+  const [saindoComFoco, setSaindoComFoco] = useState(false);
   const [recompensas, setRecompensas] = useState<Recompensa[]>([]);
   const [novaRecompensa, setNovaRecompensa] = useState({ titulo: "", custo: "200", enfeite: "🎁" });
   const [materia, setMateria] = useState("");
@@ -284,16 +285,20 @@ export default function PainelProfessor() {
     await updateDoc(sessaoRef, { liberados });
   }
 
-  // Sair com a turma em foco deixaria os celulares presos sem ninguém para
-  // liberar, então a saída encerra a aula junto.
-  async function sair() {
+  // Sair com a turma em foco tem TRES caminhos, nao dois. Antes havia um
+  // confirm() do navegador, que so oferece "encerrar e sair" ou "ficar": quem
+  // quisesse trocar de aparelho, abrir a propria tela de aluno ou passar a aula
+  // para outra pessoa era obrigado a derrubar o foco da turma no caminho.
+  function sair() {
     if (sessao?.focoAtivo) {
-      const encerrar = confirm(
-        "A turma ainda está em foco. Sair sem encerrar deixa os celulares presos na aula.\n\nEncerrar a aula e sair?",
-      );
-      if (!encerrar) return;
-      await encerrarFoco();
+      setSaindoComFoco(true);
+      return;
     }
+    router.push("/");
+  }
+
+  async function encerrarESair() {
+    await encerrarFoco();
     router.push("/");
   }
 
@@ -1174,6 +1179,53 @@ export default function PainelProfessor() {
           </section>
         )}
       </main>
+
+      {saindoComFoco && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-fundo/80 p-4 sm:items-center"
+          onClick={() => setSaindoComFoco(false)}
+        >
+          <div
+            className="surgir w-full max-w-md rounded-3xl border border-borda bg-superficie p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-[10px] uppercase tracking-[0.18em] text-pausa">
+              A turma está em foco
+            </p>
+            <h3 className="mt-1 font-titulo text-xl font-bold">Como você quer sair?</h3>
+            <p className="mt-3 text-sm leading-relaxed text-suave">
+              Se você sair mantendo o foco, os celulares da turma continuam na aula até alguém
+              encerrar daqui.
+            </p>
+
+            <div className="mt-6 space-y-2">
+              <button
+                onClick={encerrarESair}
+                className="w-full rounded-2xl bg-foco px-5 py-3 text-sm font-semibold text-fundo transition hover:brightness-110"
+              >
+                Encerrar a aula e sair
+              </button>
+              <button
+                onClick={() => router.push("/")}
+                className="w-full rounded-2xl border border-borda px-5 py-3 text-sm transition hover:border-pausa hover:text-pausa"
+              >
+                Sair mantendo a turma em foco
+              </button>
+              <button
+                onClick={() => setSaindoComFoco(false)}
+                className="w-full px-5 py-2.5 text-sm text-suave transition hover:text-texto"
+              >
+                Cancelar
+              </button>
+            </div>
+
+            <p className="mt-5 text-[11px] leading-relaxed text-suave/70">
+              Manter o foco é o que permite abrir a tela do aluno em outro aparelho, ou nesta mesma
+              máquina em outra aba, sem derrubar a aula.
+            </p>
+          </div>
+        </div>
+      )}
 
       {alunoParaMedalha && (
         <div
